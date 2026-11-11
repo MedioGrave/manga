@@ -54,6 +54,17 @@ input[type=file]{display:none}
 .fab{position:fixed;right:18px;bottom:calc(var(--sb) + 22px);background:var(--accent);color:#fff;border-radius:999px;
   padding:16px 22px 16px 18px;font-weight:750;font-size:15px;box-shadow:0 10px 28px rgba(229,56,59,.45);display:flex;gap:8px;align-items:center;z-index:5}
 .fab svg{width:20px;height:20px}
+.ghbtn{display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:9px 13px 9px 11px;font-size:13px;font-weight:650;color:var(--muted)}
+.ghbtn svg{width:18px;height:18px}
+.ghbtn.on{color:var(--text)}
+.ghbtn.spin svg{animation:sp 1s linear infinite}
+.ghcover{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:12px 10px;
+  background:repeating-linear-gradient(135deg,#1d1d21 0 10px,#19191c 10px 20px)}
+.ghcover b{font-size:13px;line-height:1.25;font-weight:750;word-break:break-word;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
+.ghcover span{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);font-weight:650}
+.ghcover svg{width:16px;height:16px;flex:none}
+.note{font-size:13px;color:var(--muted);line-height:1.5;margin:-4px 0 16px}
+.note code{background:var(--bg);padding:1px 5px;border-radius:4px;color:var(--text)}
 .dropping #library{outline:3px dashed var(--accent);outline-offset:-10px}
 
 /* ---------- LETTORE ---------- */
@@ -141,6 +152,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border:0;border-radiu
       <div class="brand">Manga<b>.</b></div>
       <div class="sub" id="libsub">La tua libreria</div>
     </div>
+    <button class="ghbtn" id="ghBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20v-4h-4"/></svg><span id="ghLbl">GitHub</span></button>
   </div>
   <div id="continue"></div>
   <div id="shelf"></div>
@@ -265,6 +277,15 @@ async function renderLibrary() {
   $('#libsub').textContent = books.length
     ? `${books.length} ${books.length === 1 ? 'volume' : 'volumi'} · ${fmtSize(total)} sul telefono`
     : 'La tua libreria';
+  const localPaths = new Set(books.map(b => b.path).filter(Boolean));
+  const remoteOnly = GH.remote.filter(r => !localPaths.has(r.path)).sort((a, b) => natural(a.title, b.title));
+  const cloudCard = r => `<div class="book">
+      <button class="cover" data-remote="${esc(r.path)}" style="width:100%;display:block">
+        <div class="ghcover"><b>${esc(r.title)}</b><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9a4 4 0 0 1 0 9z"/><path d="M12 11v6m-2.5-2.5L12 17l2.5-2.5"/></svg> ${r.size ? fmtSize(r.size) : (r.files ? r.files.length + ' pag.' : '')}</span></div>
+      </button>
+      <div class="btitle">${esc(r.title)}</div>
+      <div class="bmeta">Su GitHub · tocca per scaricare</div>
+    </div>`;
   const card = (b, big) => {
     const pct = b.pages ? Math.round(((b.page || 0) + 1) / b.pages * 100) : 0;
     const status = !b.lastRead ? 'Nuovo' : (b.page >= b.pages - 1 ? 'Finito' : `p. ${b.page + 1} di ${b.pages}`);
@@ -279,7 +300,7 @@ async function renderLibrary() {
       <div class="bmeta">${status}</div>
     </div>`;
   };
-  if (!books.length) {
+  if (!books.length && !remoteOnly.length) {
     $('#continue').innerHTML = '';
     $('#shelf').innerHTML = `<div class="empty">
       <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#e5383b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5c3-1.5 6-1.5 10 1 4-2.5 7-2.5 10-1v14c-3-1.5-6-1.5-10 1-4-2.5-7-2.5-10-1z"/><path d="M12 6v14"/></svg>
@@ -289,7 +310,9 @@ async function renderLibrary() {
     return;
   }
   $('#continue').innerHTML = '';
-  $('#shelf').innerHTML = `<div class="section">Libreria</div><div class="grid">${books.map(b => card(b)).join('')}</div>`;
+  $('#shelf').innerHTML =
+    (books.length ? `<div class="section">Sul telefono</div><div class="grid">${books.map(b => card(b)).join('')}</div>` : '') +
+    (remoteOnly.length ? `<div class="section" style="margin-top:${books.length ? 34 : 6}px">Su GitHub</div><div class="grid">${remoteOnly.map(cloudCard).join('')}</div>` : '');
 }
 
 $('#shelf').addEventListener('click', e => {
@@ -297,6 +320,8 @@ $('#shelf').addEventListener('click', e => {
   if (more) return bookMenu(more.dataset.more);
   const op = e.target.closest('[data-open]');
   if (op) openBook(op.dataset.open);
+  const rm = e.target.closest('[data-remote]');
+  if (rm) downloadRemote(rm.dataset.remote);
 });
 
 function renameSheet(b, head = 'Rinomina') {
@@ -321,7 +346,7 @@ function bookMenu(id) {
     if (a === 'restart') { b.page = 0; await DB.put(b); openBook(id); }
     if (a === 'rename') setTimeout(() => renameSheet(b), 300);
     if (a === 'del') setTimeout(() => {
-      openSheet(`<h3>Eliminare "${esc(b.title)}"?</h3><p style="color:var(--muted);font-size:14px;margin:-6px 0 18px">Il PDF viene tolto dal telefono.</p>
+      openSheet(`<h3>Eliminare "${esc(b.title)}"?</h3><p style="color:var(--muted);font-size:14px;margin:-6px 0 18px">${b.path ? 'Viene tolto dal telefono ma resta su GitHub: puoi riscaricarlo quando vuoi.' : 'Viene tolto dal telefono.'}</p>
         <div class="row2"><button class="btn2" data-x>Annulla</button><button class="btn1" data-ok>Elimina</button></div>`);
       $('#sheet [data-x]').onclick = closeSheet;
       $('#sheet [data-ok]').onclick = async () => { closeSheet(); await DB.del(id); renderLibrary(); toast('Eliminato'); };
@@ -412,12 +437,12 @@ function titleFromImages(files) {
   return pre.length >= 3 ? pre : 'Nuovo volume';
 }
 
-async function saveVolume({ title, kind, data, doc, size }) {
+async function saveVolume({ title, kind, data, doc, size, id, extra }) {
   const ratios = await doc.ratios();
   const c = await doc.render(0, 360, 1200);
   const cover = c.toDataURL('image/jpeg', 0.78);
-  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-  const book = { id, title, kind, pages: doc.numPages, page: 0, added: Date.now(), lastRead: 0, cover, size, ratios };
+  id = id || Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const book = { id, title, kind, pages: doc.numPages, page: 0, added: Date.now(), lastRead: 0, cover, size, ratios, ...(extra || {}) };
   await DB.putFile(id, data);
   await DB.put(book);
   return book;
@@ -626,7 +651,8 @@ function saveProgress(now) {
   R.book.lastRead = Date.now();
   clearTimeout(saveT);
   const b = { ...R.book };
-  if (now) DB.put(b); else saveT = setTimeout(() => DB.put(b), 400);
+  if (now) DB.put(b).then(() => b.path && GH.pushSoon(now ? 0 : 4000));
+  else saveT = setTimeout(() => DB.put(b).then(() => b.path && GH.pushSoon(4000)), 400);
 }
 
 function applyLook() {
@@ -945,15 +971,227 @@ async function keepAwake() { try { wake = await navigator.wakeLock?.request('scr
 function releaseAwake() { try { wake?.release(); } catch {} wake = null; }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && R.pdf) keepAwake();
+  if (document.visibilityState === 'visible' && !R.pdf) GH.sync(true);
   if (document.visibilityState === 'hidden' && R.pdf) saveProgress(true);
 });
+
+/* ================= GitHub: libreria nel repository privato ================= */
+const VOL_RE = /\.(pdf|cbz|zip)$/i;
+const b64enc = str => btoa(unescape(encodeURIComponent(str)));
+const b64dec = b => decodeURIComponent(escape(atob(b.replace(/\s/g, ''))));
+const remoteId = p => 'gh_' + Array.from(p).reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36) + '_' + p.length;
+
+const GH = {
+  cfg: null, remote: [], branch: null, busy: false, pushT: null, pushing: null,
+  load() {
+    try { this.cfg = JSON.parse(localStorage.getItem('manga-gh') || 'null'); } catch { this.cfg = null; }
+    try { this.remote = JSON.parse(localStorage.getItem('manga-gh-remote') || '[]'); } catch { this.remote = []; }
+    if (!this.cfg) this.remote = [];
+  },
+  save() { try { localStorage.setItem('manga-gh', JSON.stringify(this.cfg)); } catch {} },
+  async api(path, opts = {}) {
+    const { owner, repo, token } = this.cfg;
+    const url = path.startsWith('http') ? path : `https://api.github.com/repos/${owner}/${repo}${path}`;
+    const r = await fetch(url, { ...opts, cache: 'no-store', headers: {
+      Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', ...(opts.headers || {}) } });
+    return r;
+  },
+  async listRemote() {
+    if (!this.branch) {
+      const r = await this.api('');
+      if (r.status === 401) throw new Error('token');
+      if (r.status === 404) throw new Error('repo');
+      if (!r.ok) throw new Error('net');
+      this.branch = (await r.json()).default_branch || 'main';
+    }
+    const r = await this.api(`/git/trees/${encodeURIComponent(this.branch)}?recursive=1`);
+    if (r.status === 409 || r.status === 404) return []; // repository vuoto
+    if (!r.ok) throw new Error('net');
+    const tree = (await r.json()).tree || [];
+    const vols = [], folders = new Map();
+    for (const t of tree) {
+      if (t.type !== 'blob' || /(^|\/)\./.test(t.path)) continue;
+      const name = t.path.split('/').pop();
+      if (VOL_RE.test(name)) {
+        vols.push({ path: t.path, sha: t.sha, size: t.size, title: cleanTitle(name), type: /\.pdf$/i.test(name) ? 'pdf' : 'zip' });
+      } else if (IMG_RE.test(name) && t.path.includes('/')) {
+        const dir = t.path.slice(0, t.path.lastIndexOf('/'));
+        if (!folders.has(dir)) folders.set(dir, []);
+        folders.get(dir).push({ path: t.path, sha: t.sha, size: t.size });
+      }
+    }
+    for (const [dir, files] of folders) {
+      files.sort((a, b) => natural(a.path, b.path));
+      vols.push({ path: dir + '/', title: cleanTitle(dir.split('/').pop()), type: 'folder', files,
+        size: files.reduce((s, f) => s + f.size, 0), sha: files.map(f => f.sha).join('').slice(0, 40) });
+    }
+    return vols;
+  },
+  async getProgress() {
+    const r = await this.api('/contents/progress.json');
+    if (r.status === 404) return { data: {}, sha: null };
+    if (!r.ok) throw new Error('net');
+    const j = await r.json();
+    let data = {};
+    try { data = JSON.parse(b64dec(j.content)); } catch {}
+    return { data, sha: j.sha };
+  },
+  // unisce i segnalibri: vince quello letto più di recente
+  async syncProgress() {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const { data, sha } = await this.getProgress();
+      const local = (await DB.all()).filter(b => b.path);
+      let changedRemote = false, changedLocal = false;
+      for (const b of local) {
+        const rp = data[b.path];
+        if (rp && rp.updated > (b.lastRead || 0)) {
+          b.page = rp.page; b.lastRead = rp.updated; await DB.put(b); changedLocal = true;
+          if (R.book && R.book.id === b.id) { R.book.page = b.page; R.book.lastRead = b.lastRead; }
+        } else if (b.lastRead && (!rp || rp.updated < b.lastRead)) {
+          data[b.path] = { page: b.page, pages: b.pages, updated: b.lastRead }; changedRemote = true;
+        }
+      }
+      if (!changedRemote) return changedLocal;
+      const body = JSON.stringify({ message: 'Aggiorna segnalibri', content: b64enc(JSON.stringify(data, null, 1)), ...(sha ? { sha } : {}) });
+      const w = await this.api('/contents/progress.json', { method: 'PUT', body, headers: { 'Content-Type': 'application/json' } });
+      if (w.ok) return changedLocal;
+      if (w.status !== 409 && w.status !== 422) throw new Error('write');
+    }
+    return false;
+  },
+  pushSoon(ms) {
+    if (!this.cfg) return;
+    clearTimeout(this.pushT);
+    this.pushT = setTimeout(() => {
+      this.pushing = (this.pushing || Promise.resolve()).then(() => this.syncProgress()).catch(e => console.warn('sync', e));
+    }, ms);
+  },
+  async sync(quiet) {
+    if (!this.cfg || this.busy) return;
+    this.busy = true; ghButton();
+    try {
+      this.remote = await this.listRemote();
+      try { localStorage.setItem('manga-gh-remote', JSON.stringify(this.remote)); } catch {}
+      await this.syncProgress();
+      this.err = null;
+    } catch (e) {
+      console.warn(e);
+      this.err = e.message;
+      if (!quiet) toast(e.message === 'token' ? 'Token non valido o scaduto' : e.message === 'repo' ? 'Repository non trovato' : 'GitHub non raggiungibile');
+    }
+    this.busy = false; ghButton();
+    if (!R.pdf) renderLibrary();
+  },
+  async download(item, onProg) {
+    const raw = { Accept: 'application/vnd.github.raw+json' };
+    const fetchBlob = async (sha, size, base, total) => {
+      const r = await this.api(`/git/blobs/${sha}`, { headers: raw });
+      if (!r.ok) throw new Error('download');
+      if (!r.body || !r.body.getReader) { const b = await r.blob(); onProg(base + b.size, total); return b; }
+      const rd = r.body.getReader(), parts = []; let got = 0;
+      for (;;) { const { done, value } = await rd.read(); if (done) break; parts.push(value); got += value.length; onProg(base + got, total); }
+      return new Blob(parts);
+    };
+    if (item.type !== 'folder') return [await fetchBlob(item.sha, item.size, 0, item.size)];
+    const out = []; let base = 0;
+    for (const f of item.files) { out.push(await fetchBlob(f.sha, f.size, base, item.size)); base += f.size; }
+    return out;
+  }
+};
+
+function ghButton() {
+  const b = $('#ghBtn');
+  b.classList.toggle('on', !!GH.cfg);
+  b.classList.toggle('spin', GH.busy);
+  $('#ghLbl').textContent = !GH.cfg ? 'Collega GitHub' : GH.busy ? 'Sincronizzo…' : GH.err ? 'Errore' : 'GitHub';
+}
+
+$('#ghBtn').onclick = () => {
+  if (!GH.cfg) return ghSetup();
+  openSheet(`<h3>GitHub</h3><p class="note">Collegato a <code>${esc(GH.cfg.owner)}/${esc(GH.cfg.repo)}</code>.<br>
+    Metti i volumi (PDF, CBZ/ZIP o cartelle di JPG) nel repository dal computer: compaiono qui in "Su GitHub".</p>
+    <div class="menu"><button data-a="sync">Sincronizza ora</button><button data-a="edit">Modifica collegamento</button>
+    <button data-a="off" class="danger">Scollega</button></div>`);
+  $('#sheet').querySelectorAll('[data-a]').forEach(btn => btn.onclick = () => {
+    const a = btn.dataset.a; closeSheet();
+    if (a === 'sync') GH.sync(false).then(() => !GH.err && toast('Libreria aggiornata'));
+    if (a === 'edit') setTimeout(ghSetup, 300);
+    if (a === 'off') { GH.cfg = null; GH.remote = []; GH.branch = null; try { localStorage.removeItem('manga-gh'); localStorage.removeItem('manga-gh-remote'); } catch {} ghButton(); renderLibrary(); }
+  });
+};
+
+function ghSetup() {
+  const c = GH.cfg || { owner: 'MedioGrave', repo: 'manga-library', token: '' };
+  openSheet(`<h3>Collega GitHub</h3>
+    <p class="note">Repository privato con i tuoi volumi e token personale con accesso a quel repository (permesso <code>Contents</code>: lettura e scrittura).</p>
+    <div class="opt"><label>REPOSITORY</label><input id="ghRepo" class="field" style="margin:0" value="${esc(c.owner + '/' + c.repo)}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <div class="opt"><label>TOKEN</label><input id="ghTok" class="field" style="margin:0" type="password" placeholder="github_pat_…" value="${esc(c.token)}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <div class="row2"><button class="btn2" data-x>Annulla</button><button class="btn1" data-ok>Collega</button></div>`);
+  $('#sheet [data-x]').onclick = closeSheet;
+  $('#sheet [data-ok]').onclick = async () => {
+    const [owner, repo] = $('#ghRepo').value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '').split('/');
+    const token = $('#ghTok').value.trim();
+    if (!owner || !repo || !token) return toast('Compila repository e token');
+    closeSheet();
+    GH.cfg = { owner, repo, token }; GH.branch = null;
+    loading('Controllo il collegamento…');
+    try {
+      await GH.listRemote();
+      GH.save(); loading('');
+      toast('GitHub collegato');
+      GH.sync(true);
+    } catch (e) {
+      loading(''); GH.cfg = null; ghButton();
+      toast(e.message === 'token' ? 'Token non valido' : e.message === 'repo' ? 'Repository non trovato: controlla nome e permessi del token' : 'GitHub non raggiungibile');
+    }
+  };
+}
+
+async function downloadRemote(path) {
+  const item = GH.remote.find(r => r.path === path);
+  if (!item || !GH.cfg) return;
+  loading(`Scarico ${item.title}…`);
+  try {
+    const blobs = await GH.download(item, (got, tot) => {
+      $('#loadtxt').textContent = `Scarico ${item.title}… ${tot ? Math.min(100, Math.round(got / tot * 100)) : ''}%`;
+    });
+    $('#loadtxt').textContent = `Preparo ${item.title}…`;
+    const id = remoteId(item.path), extra = { path: item.path, sha: item.sha };
+    let book;
+    if (item.type === 'pdf') {
+      const buf = await blobs[0].arrayBuffer();
+      const blob = new Blob([buf], { type: 'application/pdf' });
+      const doc = await openPdfDoc(buf);
+      book = await saveVolume({ title: item.title, kind: 'pdf', data: blob, doc, size: item.size, id, extra });
+      await doc.destroy();
+    } else if (item.type === 'zip') {
+      const entries = unzipSync(new Uint8Array(await blobs[0].arrayBuffer()), { filter: e => IMG_RE.test(e.name) && !/(^|\/)(__MACOSX|\.)/.test(e.name) });
+      const names = Object.keys(entries).sort(natural);
+      if (!names.length) throw new Error('nessuna immagine nello zip');
+      const pages = names.map(n => new Blob([entries[n]], { type: mimeOf(n) }));
+      book = await saveVolume({ title: item.title, kind: 'images', data: { pages }, doc: imageDoc(pages), size: item.size, id, extra });
+    } else {
+      const pages = blobs.map((b, i) => new Blob([b], { type: mimeOf(item.files[i].path) }));
+      book = await saveVolume({ title: item.title, kind: 'images', data: { pages }, doc: imageDoc(pages), size: item.size, id, extra });
+    }
+    loading('');
+    try { await GH.syncProgress(); } catch {}
+    await renderLibrary();
+    openBook(book.id);
+  } catch (e) {
+    console.error(e); loading('');
+    toast('Download non riuscito: controlla la connessione');
+  }
+}
 
 /* ================= avvio ================= */
 (async () => {
   try {
     await DB.open();
     navigator.storage?.persist?.().catch(() => {});
-    renderLibrary();
+    GH.load(); ghButton();
+    await renderLibrary();
+    GH.sync(true);
   } catch (e) {
     $('#shelf').innerHTML = `<div class="empty"><h2>Archivio non disponibile</h2><p>Il browser non permette di salvare i file qui. Apri l'app da Safari o Chrome.</p></div>`;
   }
