@@ -1,5 +1,5 @@
 // Manga Reader — service worker: funziona anche offline.
-const VERSION = 'manga-v6';
+const VERSION = 'manga-v7';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './icon.svg',
   './icon-180.png', './icon-192.png', './icon-512.png',
