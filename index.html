@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0e0e10">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Manga">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>Manga</title>
+<style>
+:root{
+  --bg:#0e0e10;--panel:#19191c;--panel2:#232327;--line:#2c2c31;
+  --text:#f2f0eb;--muted:#8f8c86;--accent:#e5383b;
+  --st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  overscroll-behavior:none;-webkit-text-size-adjust:100%}
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input[type=file]{display:none}
+
+/* ---------- LIBRERIA ---------- */
+#library{min-height:100%;padding:calc(var(--st) + 26px) 18px calc(var(--sb) + 110px)}
+.libhead{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:24px}
+.brand{font-size:36px;font-weight:900;letter-spacing:-.03em;line-height:.95}
+.brand b{color:var(--accent)}
+.sub{color:var(--muted);font-size:13px;margin-top:8px}
+.section{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:6px 0 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:22px 14px}
+.book{position:relative;text-align:left;display:block;width:100%}
+.cover{aspect-ratio:5/7;border-radius:5px;overflow:hidden;background:var(--panel);position:relative;
+  box-shadow:0 1px 0 rgba(255,255,255,.04) inset,0 8px 22px rgba(0,0,0,.55);transition:transform .15s}
+.book:active .cover{transform:scale(.97)}
+.cover img{width:100%;height:100%;object-fit:cover;display:block}
+.cover::after{content:"";position:absolute;inset:0 auto 0 0;width:6%;background:linear-gradient(90deg,rgba(0,0,0,.35),transparent)}
+.prog{position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(0,0,0,.65)}
+.prog i{display:block;height:100%;background:var(--accent)}
+.badge{position:absolute;left:6px;top:6px;background:var(--accent);color:#fff;font-size:10px;font-weight:800;
+  letter-spacing:.06em;padding:3px 6px;border-radius:3px}
+.btitle{font-size:14px;font-weight:650;margin-top:9px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.bmeta{font-size:12px;color:var(--muted);margin-top:3px}
+.more{position:absolute;top:5px;right:5px;width:32px;height:32px;border-radius:50%;background:rgba(14,14,16,.7);
+  display:grid;place-items:center;font-size:18px;line-height:1;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.empty{border:1.5px dashed var(--line);border-radius:14px;padding:44px 24px;text-align:center;color:var(--muted);margin-top:10px}
+.empty h2{color:var(--text);font-size:19px;margin:14px 0 6px}
+.empty p{margin:0;font-size:14px;line-height:1.5}
+.fab{position:fixed;right:18px;bottom:calc(var(--sb) + 22px);background:var(--accent);color:#fff;border-radius:999px;
+  padding:16px 22px 16px 18px;font-weight:750;font-size:15px;box-shadow:0 10px 28px rgba(229,56,59,.45);display:flex;gap:8px;align-items:center;z-index:5}
+.fab svg{width:20px;height:20px}
+.dropping #library{outline:3px dashed var(--accent);outline-offset:-10px}
+
+/* ---------- LETTORE ---------- */
+#reader{position:fixed;inset:0;background:#000;display:none;touch-action:none;z-index:10}
+#reader.on{display:block}
+#stage{position:absolute;inset:0;overflow:hidden}
+#zoom{position:absolute;inset:0;transform-origin:0 0}
+#zoom.anim{transition:transform .28s cubic-bezier(.2,.8,.3,1)}
+.layer{position:absolute;inset:0;overflow:hidden}
+.layer canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#under{z-index:1}
+#flipper{z-index:2;display:none;will-change:transform;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.shade{position:absolute;inset:0;pointer-events:none;opacity:0}
+#flipper .shade{z-index:3}
+#under .shade{z-index:2}
+
+#ui{position:absolute;inset:0;pointer-events:none;z-index:20}
+.bar{position:absolute;left:0;right:0;pointer-events:auto;transition:transform .25s ease,opacity .25s ease;
+  background:rgba(14,14,16,.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.top{top:0;padding:calc(var(--st) + 8px) 8px 8px;display:flex;align-items:center;gap:6px}
+.bottom{bottom:0;padding:14px 18px calc(var(--sb) + 16px)}
+#reader:not(.ui) .top{transform:translateY(-100%);opacity:0;pointer-events:none}
+#reader:not(.ui) .bottom{transform:translateY(100%);opacity:0;pointer-events:none}
+.ibtn{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;flex:none}
+.ibtn:active{background:var(--panel2)}
+.ibtn svg{width:24px;height:24px}
+.rtitle{flex:1;min-width:0;font-weight:650;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.pgrow{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:10px;font-variant-numeric:tabular-nums}
+.pgrow b{color:var(--text);font-weight:650}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;background:transparent;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:var(--line)}
+input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:var(--line)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:var(--accent);margin-top:-9px;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+input[type=range]::-moz-range-thumb{width:22px;height:22px;border:0;border-radius:50%;background:var(--accent)}
+.endcap{position:absolute;top:50%;transform:translateY(-50%);z-index:15;pointer-events:none;
+  background:rgba(14,14,16,.85);color:var(--text);padding:10px 14px;border-radius:10px;font-size:13px;opacity:0;transition:opacity .2s}
+.endcap.show{opacity:1}
+
+/* hint primo avvio */
+#hint{position:absolute;inset:0;z-index:30;display:none;grid-template-columns:1fr 1fr 1fr;background:rgba(0,0,0,.84)}
+#hint.on{display:grid}
+#hint div{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:12px;font-size:14px;font-weight:650;line-height:1.35;border-right:1px dashed rgba(255,255,255,.25)}
+#hint div:last-child{border-right:0}
+#hint .go{color:#fff;background:rgba(229,56,59,.22)}
+#hint small{display:block;font-weight:400;color:#c9c6bf;margin-top:6px;font-size:12px}
+
+/* ---------- SHEET / LOADER ---------- */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;display:none}
+.scrim.on{display:block}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--panel);border-radius:18px 18px 0 0;
+  padding:10px 18px calc(var(--sb) + 22px);transform:translateY(105%);transition:transform .28s cubic-bezier(.2,.8,.3,1);max-width:560px;margin:0 auto}
+.sheet.on{transform:none}
+.grab{width:38px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 16px}
+.sheet h3{margin:0 0 16px;font-size:17px}
+.opt{margin-bottom:18px}
+.opt label{display:block;font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600;letter-spacing:.04em}
+.seg{display:flex;background:var(--bg);border-radius:10px;padding:3px;gap:3px}
+.seg button{flex:1;padding:10px 6px;border-radius:8px;font-size:13.5px;font-weight:600;color:var(--muted)}
+.seg button.on{background:var(--panel2);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.menu button{display:flex;width:100%;padding:15px 4px;font-size:16px;border-bottom:1px solid var(--line);text-align:left}
+.menu button:last-child{border-bottom:0}
+.menu .danger{color:var(--accent)}
+.field{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);font:inherit;font-size:16px;padding:13px 14px;border-radius:10px;margin-bottom:16px;outline:none;-webkit-user-select:text;user-select:text}
+.field:focus{border-color:var(--accent)}
+.row2{display:flex;gap:10px}
+.row2 button{flex:1;padding:14px;border-radius:12px;font-weight:700}
+.btn1{background:var(--accent);color:#fff}
+.btn2{background:var(--panel2)}
+#loader{position:fixed;inset:0;z-index:60;background:rgba(14,14,16,.85);display:none;place-items:center;text-align:center;padding:30px}
+#loader.on{display:grid}
+.spin{width:38px;height:38px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--accent);animation:sp .8s linear infinite;margin:0 auto 14px}
+@keyframes sp{to{transform:rotate(360deg)}}
+#loadtxt{font-size:14px;color:var(--muted);max-width:280px;word-break:break-word}
+#toast{position:fixed;left:50%;bottom:calc(var(--sb) + 100px);transform:translate(-50%,20px);background:var(--panel2);color:var(--text);
+  padding:11px 16px;border-radius:10px;font-size:14px;z-index:70;opacity:0;transition:.25s;pointer-events:none;max-width:86vw;text-align:center}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+
+<!-- LIBRERIA -->
+<main id="library">
+  <div class="libhead">
+    <div>
+      <div class="brand">Manga<b>.</b></div>
+      <div class="sub" id="libsub">La tua libreria</div>
+    </div>
+  </div>
+  <div id="continue"></div>
+  <div id="shelf"></div>
+</main>
+<button class="fab" id="addBtn">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+  Aggiungi
+</button>
+<input type="file" id="fileIn" accept="application/pdf,.pdf,.cbz,.zip,application/zip,application/x-cbz,image/*" multiple>
+
+<!-- LETTORE -->
+<section id="reader">
+  <div id="stage">
+    <div id="zoom">
+      <div class="layer" id="under"><canvas id="underCv"></canvas><div class="shade" id="underShade"></div></div>
+      <div class="layer" id="flipper"><canvas id="flipCv"></canvas><div class="shade" id="flipShade"></div></div>
+    </div>
+  </div>
+  <div class="endcap" id="endcap"></div>
+  <div id="ui">
+    <div class="bar top">
+      <button class="ibtn" id="backBtn" aria-label="Libreria">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="rtitle" id="rtitle"></div>
+      <button class="ibtn" id="setBtn" aria-label="Impostazioni">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+      </button>
+    </div>
+    <div class="bar bottom">
+      <div class="pgrow"><span id="pgL"></span><span id="pgR"></span></div>
+      <input type="range" id="slider" min="0" max="0" value="0">
+    </div>
+  </div>
+  <div id="hint"></div>
+</section>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet"></div>
+<div id="loader"><div><div class="spin"></div><div id="loadtxt"></div></div></div>
+<div id="toast"></div>
+
+<script type="module">
+import * as pdfjsLib from './pdfjs/pdf.min.js';
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('./pdfjs/pdf.worker.min.js', location.href).href;
+import { unzipSync } from './fflate.js';
+
+const $ = s => document.querySelector(s);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/* ================= impostazioni ================= */
+const DEF = { dir: 'rtl', mode: 'auto', effect: 'flip', bg: 'black', hintSeen: false };
+let S = { ...DEF };
+try { S = { ...DEF, ...JSON.parse(localStorage.getItem('manga-settings') || '{}') }; } catch {}
+function saveSettings() { try { localStorage.setItem('manga-settings', JSON.stringify(S)); } catch {} }
+
+/* ================= database (IndexedDB) ================= */
+const DB = {
+  db: null,
+  open() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('manga-reader', 1);
+      r.onupgradeneeded = () => {
+        const d = r.result;
+        d.createObjectStore('books', { keyPath: 'id' });
+        d.createObjectStore('files');
+      };
+      r.onsuccess = () => { this.db = r.result; res(); };
+      r.onerror = () => rej(r.error);
+    });
+  },
+  tx(store, mode, fn) {
+    return new Promise((res, rej) => {
+      const t = this.db.transaction(store, mode);
+      const req = fn(t.objectStore(store));
+      let out;
+      if (req) req.onsuccess = () => { out = req.result; };
+      t.oncomplete = () => res(out);
+      t.onerror = () => rej(t.error);
+      t.onabort = () => rej(t.error);
+    });
+  },
+  all() { return this.tx('books', 'readonly', s => s.getAll()); },
+  get(id) { return this.tx('books', 'readonly', s => s.get(id)); },
+  put(b) { return this.tx('books', 'readwrite', s => s.put(b)); },
+  file(id) { return this.tx('files', 'readonly', s => s.get(id)); },
+  putFile(id, blob) { return this.tx('files', 'readwrite', s => s.put(blob, id)); },
+  async del(id) {
+    await this.tx('books', 'readwrite', s => s.delete(id));
+    await this.tx('files', 'readwrite', s => s.delete(id));
+  }
+};
+
+/* ================= UI helper ================= */
+function loading(txt) { $('#loadtxt').textContent = txt || ''; $('#loader').classList.toggle('on', !!txt); }
+let toastT;
+function toast(t) {
+  const el = $('#toast'); el.textContent = t; el.classList.add('on');
+  clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 2400);
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function fmtSize(b) { return b > 1e9 ? (b / 1e9).toFixed(1) + ' GB' : Math.round(b / 1e6) + ' MB'; }
+
+let sheetClose = null;
+function openSheet(html, onClose) {
+  $('#sheet').innerHTML = '<div class="grab"></div>' + html;
+  $('#scrim').classList.add('on');
+  requestAnimationFrame(() => $('#sheet').classList.add('on'));
+  sheetClose = onClose || null;
+}
+function closeSheet() {
+  $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on');
+  const f = sheetClose; sheetClose = null; f && f();
+}
+$('#scrim').onclick = closeSheet;
+
+/* ================= libreria ================= */
+let books = [];
+async function renderLibrary() {
+  books = (await DB.all()).sort((a, b) => (b.lastRead || b.added) - (a.lastRead || a.added));
+  const total = books.reduce((s, b) => s + (b.size || 0), 0);
+  $('#libsub').textContent = books.length
+    ? `${books.length} ${books.length === 1 ? 'volume' : 'volumi'} · ${fmtSize(total)} sul telefono`
+    : 'La tua libreria';
+  const card = (b, big) => {
+    const pct = b.pages ? Math.round(((b.page || 0) + 1) / b.pages * 100) : 0;
+    const status = !b.lastRead ? 'Nuovo' : (b.page >= b.pages - 1 ? 'Finito' : `p. ${b.page + 1} di ${b.pages}`);
+    return `<div class="book" data-id="${b.id}">
+      <button class="cover" data-open="${b.id}" style="width:100%;display:block">
+        ${b.cover ? `<img src="${b.cover}" alt="">` : ''}
+        ${!b.lastRead ? '<span class="badge">NUOVO</span>' : ''}
+        ${b.lastRead ? `<div class="prog"><i style="width:${pct}%"></i></div>` : ''}
+      </button>
+      <button class="more" data-more="${b.id}" aria-label="Opzioni">⋯</button>
+      <div class="btitle">${esc(b.title)}</div>
+      <div class="bmeta">${status}</div>
+    </div>`;
+  };
+  if (!books.length) {
+    $('#continue').innerHTML = '';
+    $('#shelf').innerHTML = `<div class="empty">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#e5383b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5c3-1.5 6-1.5 10 1 4-2.5 7-2.5 10-1v14c-3-1.5-6-1.5-10 1-4-2.5-7-2.5-10-1z"/><path d="M12 6v14"/></svg>
+      <h2>Nessun manga, ancora</h2>
+      <p>Tocca <b>Aggiungi</b> e scegli un PDF, un CBZ/ZIP<br>oppure tutte le immagini JPG di un volume.<br>Restano salvati sul telefono, anche offline.</p>
+    </div>`;
+    return;
+  }
+  $('#continue').innerHTML = '';
+  $('#shelf').innerHTML = `<div class="section">Libreria</div><div class="grid">${books.map(b => card(b)).join('')}</div>`;
+}
+
+$('#shelf').addEventListener('click', e => {
+  const more = e.target.closest('[data-more]');
+  if (more) return bookMenu(more.dataset.more);
+  const op = e.target.closest('[data-open]');
+  if (op) openBook(op.dataset.open);
+});
+
+function renameSheet(b, head = 'Rinomina') {
+  openSheet(`<h3>${head}</h3><input id="renIn" class="field" value="${esc(b.title)}">
+    <div class="row2"><button class="btn2" data-x>Annulla</button><button class="btn1" data-ok>Salva</button></div>`);
+  const inp = $('#renIn'); inp.focus(); inp.select();
+  const save = async () => { const t = inp.value.trim(); closeSheet(); if (t) { b.title = t; await DB.put(b); renderLibrary(); } };
+  $('#sheet [data-ok]').onclick = save; $('#sheet [data-x]').onclick = closeSheet;
+  inp.onkeydown = e => { if (e.key === 'Enter') save(); };
+}
+
+function bookMenu(id) {
+  const b = books.find(x => x.id === id); if (!b) return;
+  openSheet(`<h3>${esc(b.title)}</h3><div class="menu">
+    <button data-a="open">Leggi</button>
+    <button data-a="restart">Ricomincia dall'inizio</button>
+    <button data-a="rename">Rinomina</button>
+    <button data-a="del" class="danger">Elimina dal telefono</button></div>`);
+  $('#sheet').querySelectorAll('[data-a]').forEach(btn => btn.onclick = async () => {
+    const a = btn.dataset.a; closeSheet();
+    if (a === 'open') openBook(id);
+    if (a === 'restart') { b.page = 0; await DB.put(b); openBook(id); }
+    if (a === 'rename') setTimeout(() => renameSheet(b), 300);
+    if (a === 'del') setTimeout(() => {
+      openSheet(`<h3>Eliminare "${esc(b.title)}"?</h3><p style="color:var(--muted);font-size:14px;margin:-6px 0 18px">Il PDF viene tolto dal telefono.</p>
+        <div class="row2"><button class="btn2" data-x>Annulla</button><button class="btn1" data-ok>Elimina</button></div>`);
+      $('#sheet [data-x]').onclick = closeSheet;
+      $('#sheet [data-ok]').onclick = async () => { closeSheet(); await DB.del(id); renderLibrary(); toast('Eliminato'); };
+    }, 300);
+  });
+}
+
+/* ---------- import ---------- */
+$('#addBtn').onclick = () => $('#fileIn').click();
+$('#fileIn').onchange = e => { importFiles([...e.target.files]); e.target.value = ''; };
+document.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('dropping'); });
+document.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('dropping'); });
+document.addEventListener('drop', e => {
+  e.preventDefault(); document.body.classList.remove('dropping');
+  if (!$('#reader').classList.contains('on')) importFiles([...e.dataTransfer.files]);
+});
+
+/* ---------- formati: PDF, CBZ/ZIP, immagini ---------- */
+const IMG_RE = /\.(jpe?g|png|webp|gif|avif|bmp)$/i;
+const isPdf = f => /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name);
+const isZip = f => /\.(cbz|zip)$/i.test(f.name) || /zip|cbz/i.test(f.type);
+const isImg = f => /^image\//.test(f.type) || IMG_RE.test(f.name);
+const natural = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
+const mimeOf = n => /\.png$/i.test(n) ? 'image/png' : /\.webp$/i.test(n) ? 'image/webp' : /\.gif$/i.test(n) ? 'image/gif' : /\.avif$/i.test(n) ? 'image/avif' : 'image/jpeg';
+const cleanTitle = n => n.replace(/\.[a-z0-9]+$/i, '').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+async function openPdfDoc(buf) {
+  const task = pdfjsLib.getDocument({ data: buf });
+  const pdf = await task.promise;
+  return {
+    numPages: pdf.numPages,
+    async ratios() {
+      const ps = await Promise.all(Array.from({ length: pdf.numPages }, (_, i) => pdf.getPage(i + 1)));
+      return ps.map(p => { const v = p.getViewport({ scale: 1 }); return v.width / v.height; });
+    },
+    async render(i, w, h) {
+      const page = await pdf.getPage(i + 1);
+      const vp0 = page.getViewport({ scale: 1 });
+      const vp = page.getViewport({ scale: Math.min(w / vp0.width, h / vp0.height) });
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(vp.width)); c.height = Math.max(1, Math.round(vp.height));
+      await page.render({ canvas: c, viewport: vp }).promise;
+      page.cleanup();
+      return c;
+    },
+    destroy: () => task.destroy()
+  };
+}
+
+function imageDoc(blobs) {
+  return {
+    numPages: blobs.length,
+    async ratios() {
+      const r = [];
+      for (const b of blobs) {
+        try { const bm = await createImageBitmap(b); r.push(bm.width / bm.height); bm.close(); }
+        catch { r.push(0.7); }
+      }
+      return r;
+    },
+    async render(i, w, h) {
+      const bm = await createImageBitmap(blobs[i]);
+      const s = Math.min(w / bm.width, h / bm.height);
+      const cw = Math.max(1, Math.round(bm.width * s)), ch = Math.max(1, Math.round(bm.height * s));
+      let src = bm;
+      if (s < 0.5) { // ridimensionamento di qualità per immagini molto grandi
+        try { src = await createImageBitmap(blobs[i], { resizeWidth: cw, resizeHeight: ch, resizeQuality: 'high' }); } catch {}
+      }
+      const c = document.createElement('canvas');
+      c.width = cw; c.height = ch;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(src, 0, 0, cw, ch);
+      bm.close(); if (src !== bm) src.close();
+      return c;
+    },
+    destroy() {}
+  };
+}
+
+function titleFromImages(files) {
+  const dir = (files[0].webkitRelativePath || '').split('/').slice(-2, -1)[0];
+  if (dir) return cleanTitle(dir);
+  const names = files.map(f => f.name.replace(/\.[a-z0-9]+$/i, ''));
+  let pre = names[0];
+  for (const n of names) while (pre && !n.startsWith(pre)) pre = pre.slice(0, -1);
+  pre = cleanTitle(pre.replace(/[\s_\-.(\[]*(p|pag|page|pagina)?[\s_\-.]*\d*$/i, ''));
+  return pre.length >= 3 ? pre : 'Nuovo volume';
+}
+
+async function saveVolume({ title, kind, data, doc, size }) {
+  const ratios = await doc.ratios();
+  const c = await doc.render(0, 360, 1200);
+  const cover = c.toDataURL('image/jpeg', 0.78);
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const book = { id, title, kind, pages: doc.numPages, page: 0, added: Date.now(), lastRead: 0, cover, size, ratios };
+  await DB.putFile(id, data);
+  await DB.put(book);
+  return book;
+}
+
+async function importFiles(files) {
+  const pdfs = files.filter(isPdf), zips = files.filter(f => !isPdf(f) && isZip(f));
+  const imgs = files.filter(f => !isPdf(f) && !isZip(f) && isImg(f)).sort((a, b) => natural(a.webkitRelativePath || a.name, b.webkitRelativePath || b.name));
+  const jobs = [...pdfs.map(f => ['pdf', f]), ...zips.map(f => ['zip', f])];
+  if (imgs.length) jobs.push(['imgs', imgs]);
+  if (!jobs.length) return toast('Scegli un PDF, un CBZ/ZIP o delle immagini');
+  let ok = 0, last = null, imgBook = null;
+  for (let k = 0; k < jobs.length; k++) {
+    const [type, f] = jobs[k];
+    const name = type === 'imgs' ? `${f.length} immagini` : f.name;
+    const step = jobs.length > 1 ? `(${k + 1}/${jobs.length}) ` : '';
+    loading(`Importo ${step}${name}…`);
+    try {
+      if (type === 'pdf') {
+        const buf = await f.arrayBuffer();
+        const blob = new Blob([buf], { type: 'application/pdf' });
+        const doc = await openPdfDoc(buf);
+        last = await saveVolume({ title: cleanTitle(f.name), kind: 'pdf', data: blob, doc, size: f.size });
+        await doc.destroy();
+      } else if (type === 'zip') {
+        const u8 = new Uint8Array(await f.arrayBuffer());
+        const entries = unzipSync(u8, { filter: e => IMG_RE.test(e.name) && !/(^|\/)(__MACOSX|\.)/.test(e.name) });
+        const names = Object.keys(entries).sort(natural);
+        if (!names.length) throw new Error('nessuna immagine nello zip');
+        const blobs = names.map(n => new Blob([entries[n]], { type: mimeOf(n) }));
+        last = await saveVolume({ title: cleanTitle(f.name), kind: 'images', data: { pages: blobs }, doc: imageDoc(blobs), size: f.size });
+      } else {
+        const blobs = f.map(x => new Blob([x], { type: x.type || mimeOf(x.name) }));
+        const size = f.reduce((s, x) => s + x.size, 0);
+        last = imgBook = await saveVolume({ title: titleFromImages(f), kind: 'images', data: { pages: blobs }, doc: imageDoc(blobs), size });
+      }
+      ok++;
+    } catch (err) {
+      console.error(err);
+      toast(`Non riesco ad aprire ${name}`);
+    }
+  }
+  loading('');
+  await renderLibrary();
+  if (imgBook) renameSheet(imgBook, `Volume da ${imgBook.pages} immagini — come lo chiamo?`);
+  else if (ok) toast(ok === 1 ? 'Aggiunto alla libreria' : `${ok} volumi aggiunti`);
+}
+
+/* ================= lettore ================= */
+const stage = $('#stage'), zoomEl = $('#zoom'), under = $('#under'), flipper = $('#flipper');
+const underCv = $('#underCv'), flipCv = $('#flipCv'), underShade = $('#underShade'), flipShade = $('#flipShade');
+
+const R = {
+  book: null, pdf: null, ratios: [], views: [], vi: 0,
+  pageCache: new Map(), viewCache: new Map(), sizeKey: ''
+};
+
+function isDouble() {
+  if (S.mode === 'single') return false;
+  if (S.mode === 'double') return true;
+  return stage.clientWidth > stage.clientHeight * 1.05;
+}
+function buildViews() {
+  const n = R.pdf.numPages, r = R.ratios, v = [];
+  if (!isDouble()) { for (let i = 0; i < n; i++) v.push([i]); }
+  else {
+    v.push([0]); // copertina da sola
+    let i = 1;
+    while (i < n) {
+      if (r[i] > 1 || i + 1 >= n || r[i + 1] > 1) { v.push([i]); i++; }
+      else { v.push([i, i + 1]); i += 2; }
+    }
+  }
+  R.views = v;
+}
+const viewOf = p => Math.max(0, R.views.findIndex(v => v.includes(p)));
+const dpr = () => Math.min(window.devicePixelRatio || 1, 2);
+const bgColor = () => S.bg === 'white' ? '#ffffff' : '#000000';
+
+// singola pagina renderizzata alla dimensione esatta in pixel
+function pageCanvas(i, w, h) {
+  const key = `${i}:${w}x${h}`;
+  if (R.pageCache.has(key)) { const p = R.pageCache.get(key); R.pageCache.delete(key); R.pageCache.set(key, p); return p; }
+  const p = R.pdf.render(i, w, h);
+  p.catch(() => R.pageCache.delete(key));
+  R.pageCache.set(key, p);
+  while (R.pageCache.size > 8) R.pageCache.delete(R.pageCache.keys().next().value);
+  return p;
+}
+
+// vista completa (1 o 2 pagine) composta su un canvas grande quanto lo schermo
+function composeView(vi, q = 1) {
+  const W = stage.clientWidth, H = stage.clientHeight, d = dpr() * q;
+  const key = `${vi}|${W}x${H}@${d}|${S.dir}|${S.bg}`;
+  if (q === 1 && R.viewCache.has(key)) return R.viewCache.get(key);
+  const pages = R.views[vi];
+  const order = S.dir === 'rtl' ? [...pages].reverse() : pages; // ordine di disegno da sinistra
+  const ratios = order.map(i => R.ratios[i] || 0.7);
+  const tot = ratios.reduce((a, b) => a + b, 0);
+  let h = H, w = h * tot;
+  if (w > W) { w = W; h = w / tot; }
+  const x0 = (W - w) / 2, y0 = (H - h) / 2;
+  const p = (async () => {
+    const pcs = await Promise.all(order.map((pi, k) =>
+      pageCanvas(pi, Math.round(h * ratios[k] * d), Math.round(h * d))));
+    const c = document.createElement('canvas');
+    c.width = Math.round(W * d); c.height = Math.round(H * d);
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = bgColor(); ctx.fillRect(0, 0, c.width, c.height);
+    ctx.imageSmoothingQuality = 'high';
+    let x = x0;
+    order.forEach((pi, k) => {
+      const pw = h * ratios[k];
+      ctx.drawImage(pcs[k], x * d, y0 * d, pw * d, h * d);
+      x += pw;
+    });
+    if (order.length === 2) { // ombra della rilegatura al centro
+      const cx = (x0 + h * ratios[0]) * d, gw = 26 * d;
+      const g = ctx.createLinearGradient(cx - gw, 0, cx + gw, 0);
+      g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(.5, 'rgba(0,0,0,.28)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.fillRect(cx - gw, y0 * d, gw * 2, h * d);
+    }
+    c.ready = true;
+    return c;
+  })();
+  if (q === 1) {
+    p.catch(() => R.viewCache.delete(key));
+    R.viewCache.set(key, p);
+    p.then(c => { R.viewCache.set(key, p); p.canvas = c; });
+    while (R.viewCache.size > 6) R.viewCache.delete(R.viewCache.keys().next().value);
+  }
+  return p;
+}
+
+let drawTok = 0;
+function blit(dst, src) {
+  dst.tok = ++drawTok;
+  if (dst.width !== src.width || dst.height !== src.height) { dst.width = src.width; dst.height = src.height; }
+  dst.getContext('2d').drawImage(src, 0, 0);
+}
+async function show(dst, vi, q = 1) {
+  const tok = dst.tok = ++drawTok;
+  const p = composeView(vi, q);
+  if (p.canvas) return blit(dst, p.canvas);
+  try { const c = await p; if (dst.tok === tok) blit(dst, c); } catch (e) { console.error(e); }
+}
+function prefetch() {
+  const fw = [1, 2, -1];
+  for (const k of fw) { const v = R.vi + k; if (v >= 0 && v < R.views.length) composeView(v); }
+}
+
+async function openBook(id) {
+  const book = await DB.get(id);
+  if (!book) return;
+  loading('Apro il volume…');
+  try {
+    const data = await DB.file(id);
+    const pdf = book.kind === 'images' ? imageDoc(data.pages) : await openPdfDoc(await data.arrayBuffer());
+    R.book = book; R.pdf = pdf;
+    R.pageCache.clear(); R.viewCache.clear();
+    if (book.ratios && book.ratios.length === pdf.numPages) R.ratios = book.ratios;
+    else { R.ratios = await pdf.ratios(); book.ratios = R.ratios; }
+    book.pages = pdf.numPages;
+    book.lastRead = Date.now();
+    DB.put(book);
+    $('#rtitle').textContent = book.title;
+    $('#reader').classList.add('on');
+    history.pushState({ reader: true }, '');
+    applyLook();
+    resetZoom(false);
+    buildViews();
+    R.vi = viewOf(clamp(book.page || 0, 0, pdf.numPages - 1));
+    R.sizeKey = stage.clientWidth + 'x' + stage.clientHeight;
+    await show(underCv, R.vi);
+    loading('');
+    updateUI();
+    prefetch();
+    keepAwake();
+    if (!S.hintSeen) showHint(); else flashUI();
+  } catch (e) {
+    console.error(e); loading(''); toast('Errore nell\'apertura del volume');
+  }
+}
+
+async function closeReader(fromPop) {
+  if (!R.pdf) return;
+  finishNow();
+  saveProgress(true);
+  $('#reader').classList.remove('on', 'ui');
+  const doc = R.pdf; R.pdf = null;
+  R.pageCache.clear(); R.viewCache.clear();
+  underCv.width = underCv.height = flipCv.width = flipCv.height = 1;
+  releaseAwake();
+  try { await doc.destroy(); } catch {}
+  if (!fromPop && history.state && history.state.reader) history.back();
+  renderLibrary();
+}
+window.addEventListener('popstate', () => { if ($('#reader').classList.contains('on')) closeReader(true); });
+$('#backBtn').onclick = () => closeReader(false);
+
+let saveT;
+function saveProgress(now) {
+  if (!R.book) return;
+  R.book.page = Math.min(...R.views[R.vi]);
+  if (R.vi === R.views.length - 1) R.book.page = R.pdf ? R.pdf.numPages - 1 : R.book.page;
+  R.book.lastRead = Date.now();
+  clearTimeout(saveT);
+  const b = { ...R.book };
+  if (now) DB.put(b); else saveT = setTimeout(() => DB.put(b), 400);
+}
+
+function applyLook() {
+  $('#reader').style.background = bgColor();
+  $('#slider').style.direction = S.dir === 'rtl' ? 'rtl' : 'ltr';
+  const W = stage.clientWidth, H = stage.clientHeight;
+  zoomEl.style.perspective = Math.round(Math.max(W, H) * 2.2) + 'px';
+}
+
+function updateUI() {
+  const v = R.views[R.vi], n = R.pdf.numPages;
+  const lbl = v.length === 2 ? `${Math.min(...v) + 1}–${Math.max(...v) + 1}` : `${v[0] + 1}`;
+  const L = `<b>Pagina ${lbl}</b> di ${n}`, Rr = `${Math.round((Math.max(...v) + 1) / n * 100)}%`;
+  if (S.dir === 'rtl') { $('#pgL').innerHTML = Rr; $('#pgR').innerHTML = L; }
+  else { $('#pgL').innerHTML = L; $('#pgR').innerHTML = Rr; }
+  const sl = $('#slider'); sl.max = R.views.length - 1; sl.value = R.vi;
+}
+$('#slider').addEventListener('input', e => {
+  const v = R.views[+e.target.value], n = R.pdf.numPages;
+  const lbl = v.length === 2 ? `${Math.min(...v) + 1}–${Math.max(...v) + 1}` : `${v[0] + 1}`;
+  $(S.dir === 'rtl' ? '#pgR' : '#pgL').innerHTML = `<b>Pagina ${lbl}</b> di ${n}`;
+});
+$('#slider').addEventListener('change', e => jumpTo(+e.target.value));
+function jumpTo(vi) {
+  finishNow(); resetZoom(false);
+  R.vi = clamp(vi, 0, R.views.length - 1);
+  show(underCv, R.vi); updateUI(); prefetch(); saveProgress();
+}
+
+/* ---------- UI visibile / nascosta ---------- */
+function toggleUI(force) { $('#reader').classList.toggle('ui', force ?? !$('#reader').classList.contains('ui')); }
+let flashT;
+function flashUI() { toggleUI(true); clearTimeout(flashT); flashT = setTimeout(() => toggleUI(false), 1800); }
+
+function showHint() {
+  const rtl = S.dir === 'rtl';
+  const h = $('#hint');
+  h.innerHTML = rtl
+    ? `<div class="go">◀ Avanti<small>tocca qui o trascina verso destra</small></div><div>Menu<small>tocco al centro<br>doppio tocco = zoom</small></div><div>Indietro ▶<small>tocca qui</small></div>`
+    : `<div>◀ Indietro<small>tocca qui</small></div><div>Menu<small>tocco al centro<br>doppio tocco = zoom</small></div><div class="go">Avanti ▶<small>tocca qui o trascina verso sinistra</small></div>`;
+  h.classList.add('on');
+  h.onclick = () => { h.classList.remove('on'); S.hintSeen = true; saveSettings(); };
+}
+
+let endT;
+function endcap(txt, side) {
+  const el = $('#endcap'); el.textContent = txt;
+  el.style.left = side === 'left' ? '16px' : 'auto'; el.style.right = side === 'right' ? '16px' : 'auto';
+  el.classList.add('show'); clearTimeout(endT); endT = setTimeout(() => el.classList.remove('show'), 1200);
+}
+
+/* ================= sfogliare ================= */
+// F = sfogliata in corso. p = avanzamento 0..1 (1 = pagina girata)
+let F = null;
+
+function startFlip(forward) {
+  const target = R.vi + (forward ? 1 : -1);
+  if (target < 0 || target >= R.views.length) {
+    const fwdSide = S.dir === 'rtl' ? 'left' : 'right';
+    const side = forward ? fwdSide : (fwdSide === 'left' ? 'right' : 'left');
+    endcap(forward ? 'Fine del volume' : 'Sei alla prima pagina', side);
+    return null;
+  }
+  const effect = isDouble() ? 'slide' : S.effect;
+  F = { forward, target, p: 0, effect, anim: null };
+  flipper.style.transition = 'none'; flipShade.style.transition = 'none'; underShade.style.transition = 'none';
+  if (forward) { blit(flipCv, underCv); show(underCv, target); }
+  else { show(flipCv, target); }
+  flipper.style.transformOrigin = S.dir === 'rtl' ? '100% 50%' : '0% 50%';
+  const shadeDir = S.dir === 'rtl' ? 'to left' : 'to right';
+  flipShade.style.background = `linear-gradient(${shadeDir}, rgba(0,0,0,.05), rgba(0,0,0,.55))`;
+  underShade.style.background = `linear-gradient(${shadeDir}, rgba(0,0,0,.45), rgba(0,0,0,0) 70%)`;
+  flipper.style.display = 'block';
+  setFlip(0);
+  return F;
+}
+
+function setFlip(p) {
+  F.p = p;
+  const vis = F.forward ? p : 1 - p;        // quanto è "sollevata" la pagina superiore
+  const s = S.dir === 'rtl' ? 1 : -1;
+  const W = stage.clientWidth;
+  if (F.effect === 'flip') {
+    const ang = vis * 90;
+    flipper.style.transform = `rotateY(${s * ang}deg)`;
+    flipShade.style.opacity = (vis * 0.9).toFixed(3);
+    underShade.style.opacity = (Math.sin(vis * Math.PI) * 0.9).toFixed(3);
+  } else {
+    flipper.style.transform = `translate3d(${s * vis * W}px,0,0)`;
+    flipShade.style.opacity = (vis * 0.35).toFixed(3);
+    underShade.style.opacity = ((1 - vis) * 0.6 * (vis > 0 ? 1 : 0)).toFixed(3);
+  }
+}
+
+function endFlip(complete, ms) {
+  if (!F) return;
+  const f = F;
+  ms = ms ?? Math.round(120 + 230 * (complete ? 1 - f.p : f.p));
+  const tr = `transform ${ms}ms cubic-bezier(.25,.8,.3,1), opacity ${ms}ms`;
+  flipper.style.transition = tr; flipShade.style.transition = `opacity ${ms}ms`; underShade.style.transition = `opacity ${ms}ms`;
+  requestAnimationFrame(() => setFlip(complete ? 1 : 0));
+  f.done = () => {
+    if (F !== f) return;
+    clearTimeout(f.anim);
+    if (complete) {
+      if (!f.forward) blit(underCv, flipCv);
+      R.vi = f.target;
+    } else if (f.forward) blit(underCv, flipCv);
+    flipper.style.display = 'none'; flipper.style.transition = 'none';
+    underShade.style.opacity = 0;
+    F = null;
+    if (complete) { updateUI(); prefetch(); saveProgress(); }
+  };
+  f.anim = setTimeout(f.done, ms + 30);
+}
+function finishNow() { if (F && F.done) F.done(); else if (F) { endFlip(false, 0); F && F.done && F.done(); } }
+
+function turn(forward) {
+  if (Z.s > 1.01) { resetZoom(true); }
+  finishNow();
+  if (startFlip(forward)) endFlip(true, 330);
+}
+
+/* ================= zoom ================= */
+const Z = { s: 1, x: 0, y: 0 };
+function applyZoom(anim) {
+  zoomEl.classList.toggle('anim', !!anim);
+  zoomEl.style.transform = Z.s === 1 && Z.x === 0 && Z.y === 0 ? '' : `translate3d(${Z.x}px,${Z.y}px,0) scale(${Z.s})`;
+}
+function clampZoom() {
+  const W = stage.clientWidth, H = stage.clientHeight;
+  Z.s = clamp(Z.s, 1, 5);
+  Z.x = clamp(Z.x, W - W * Z.s, 0); Z.y = clamp(Z.y, H - H * Z.s, 0);
+}
+let hiresT;
+function zoomSettled() {
+  clearTimeout(hiresT);
+  hiresT = setTimeout(() => {
+    if (!R.pdf) return;
+    if (Z.s > 1.2) {
+      const W = stage.clientWidth, H = stage.clientHeight, d = dpr();
+      const q = Math.min(Z.s, Math.sqrt(16e6 / (W * H * d * d)));
+      if (q > 1.1) show(underCv, R.vi, q);
+    }
+  }, 180);
+}
+function resetZoom(anim) {
+  if (Z.s === 1 && Z.x === 0 && Z.y === 0) return;
+  Z.s = 1; Z.x = 0; Z.y = 0; applyZoom(anim);
+  if (R.pdf) show(underCv, R.vi);
+}
+function zoomAt(px, py, s, anim) {
+  const cx = (px - Z.x) / Z.s, cy = (py - Z.y) / Z.s;
+  Z.s = s; Z.x = px - cx * s; Z.y = py - cy * s;
+  clampZoom(); applyZoom(anim); zoomSettled();
+}
+
+/* ================= gesti ================= */
+const P = new Map();
+let G = null;            // gesto corrente
+let lastTap = null, tapT = null;
+
+stage.addEventListener('pointerdown', e => {
+  stage.setPointerCapture(e.pointerId);
+  P.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (P.size === 2) {
+    if (G && G.type === 'flip' && F) endFlip(false);
+    const [a, b] = [...P.values()];
+    G = { type: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y), s0: Z.s, x0: Z.x, y0: Z.y,
+      m0: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
+    zoomEl.classList.remove('anim');
+    return;
+  }
+  if (P.size > 2) return;
+  if (F) finishNow();
+  G = { type: 'pending', sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY, t: performance.now(), hist: [] };
+});
+
+stage.addEventListener('pointermove', e => {
+  if (!P.has(e.pointerId)) return;
+  P.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (!G) return;
+  if (G.type === 'pinch' && P.size >= 2) {
+    const [a, b] = [...P.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y), m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const s = clamp(G.s0 * d / G.d0, 0.8, 5);
+    const cx = (G.m0.x - G.x0) / G.s0, cy = (G.m0.y - G.y0) / G.s0;
+    Z.s = s; Z.x = m.x - cx * s; Z.y = m.y - cy * s;
+    if (s >= 1) clampZoom();
+    applyZoom(false);
+    return;
+  }
+  const dx = e.clientX - G.sx, dy = e.clientY - G.sy;
+  if (G.type === 'pending') {
+    if (Math.hypot(dx, dy) < 9) return;
+    if (Z.s > 1.01) { G.type = 'pan'; G.px = Z.x; G.py = Z.y; zoomEl.classList.remove('anim'); }
+    else if (Math.abs(dx) > Math.abs(dy) * 0.8) {
+      const forward = S.dir === 'rtl' ? dx > 0 : dx < 0;
+      G.type = startFlip(forward) ? 'flip' : 'none';
+    } else G.type = 'none';
+  }
+  if (G.type === 'pan') {
+    Z.x = G.px + dx; Z.y = G.py + dy; clampZoom(); applyZoom(false);
+  } else if (G.type === 'flip' && F) {
+    const sign = (S.dir === 'rtl' ? 1 : -1) * (F.forward ? 1 : -1);
+    const W = stage.clientWidth;
+    setFlip(clamp(sign * dx / (W * (F.effect === 'flip' ? 0.75 : 1)), 0, 1));
+    G.hist.push({ x: e.clientX, t: performance.now() });
+    if (G.hist.length > 6) G.hist.shift();
+  }
+});
+
+function pointerEnd(e) {
+  if (!P.has(e.pointerId)) return;
+  P.delete(e.pointerId);
+  if (!G) return;
+  if (G.type === 'pinch') {
+    if (P.size === 0) {
+      if (Z.s < 1.08) resetZoom(true); else { clampZoom(); applyZoom(true); zoomSettled(); }
+      G = null;
+    } else if (P.size === 1) { // continua come pan con il dito rimasto
+      const [a] = [...P.values()];
+      G = { type: Z.s > 1.01 ? 'pan' : 'none', sx: a.x, sy: a.y, px: Z.x, py: Z.y };
+    }
+    return;
+  }
+  if (P.size > 0) return;
+  if (G.type === 'flip' && F) {
+    const h = G.hist; let v = 0;
+    if (h.length >= 2) { const a = h[0], b = h[h.length - 1]; v = (b.x - a.x) / Math.max(1, b.t - a.t); }
+    const sign = (S.dir === 'rtl' ? 1 : -1) * (F.forward ? 1 : -1);
+    const fast = sign * v > 0.35, back = sign * v < -0.25;
+    endFlip(!back && (F.p > 0.33 || (fast && F.p > 0.03)));
+  } else if (G.type === 'pan') {
+    zoomSettled();
+  } else if (G.type === 'pending' && e.type === 'pointerup' && performance.now() - G.t < 450) {
+    handleTap(e.clientX, e.clientY);
+  }
+  G = null;
+}
+stage.addEventListener('pointerup', pointerEnd);
+stage.addEventListener('pointercancel', pointerEnd);
+
+function handleTap(x, y) {
+  const W = stage.clientWidth;
+  const zone = x < W * 0.3 ? 'left' : x > W * 0.7 ? 'right' : 'center';
+  const now = performance.now();
+  const isDbl = lastTap && now - lastTap.t < 300 && Math.hypot(x - lastTap.x, y - lastTap.y) < 40;
+  if (isDbl) {
+    clearTimeout(tapT); lastTap = null;
+    if (Z.s > 1.01) resetZoom(true); else zoomAt(x, y, 2.5, true);
+    return;
+  }
+  lastTap = { t: now, x, y };
+  // con lo zoom attivo o al centro aspettiamo un eventuale doppio tocco
+  if (zone === 'center' || Z.s > 1.01) {
+    clearTimeout(tapT);
+    tapT = setTimeout(() => { lastTap = null; toggleUI(); }, 260);
+    return;
+  }
+  if ($('#reader').classList.contains('ui')) { toggleUI(false); }
+  const fwdZone = S.dir === 'rtl' ? 'left' : 'right';
+  turn(zone === fwdZone);
+}
+
+document.addEventListener('keydown', e => {
+  if (!R.pdf || $('#sheet').classList.contains('on')) return;
+  const rtl = S.dir === 'rtl';
+  if (e.key === 'ArrowLeft') turn(rtl);
+  else if (e.key === 'ArrowRight') turn(!rtl);
+  else if (e.key === ' ' ) { e.preventDefault(); turn(true); }
+  else if (e.key === 'Escape') closeReader(false);
+});
+
+/* ---------- rotazione / ridimensionamento ---------- */
+let rzT;
+window.addEventListener('resize', () => {
+  if (!R.pdf) return;
+  clearTimeout(rzT);
+  rzT = setTimeout(() => {
+    const key = stage.clientWidth + 'x' + stage.clientHeight;
+    if (key === R.sizeKey) return;
+    R.sizeKey = key;
+    finishNow();
+    const page = Math.min(...R.views[R.vi]);
+    resetZoom(false);
+    R.viewCache.clear(); R.pageCache.clear();
+    applyLook(); buildViews(); R.vi = viewOf(page);
+    show(underCv, R.vi); updateUI(); prefetch();
+  }, 150);
+});
+
+/* ---------- impostazioni ---------- */
+$('#setBtn').onclick = () => {
+  const seg = (k, opts) => `<div class="seg" data-k="${k}">${opts.map(([v, l]) =>
+    `<button data-v="${v}" class="${S[k] === v ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  openSheet(`<h3>Lettura</h3>
+    <div class="opt"><label>DIREZIONE</label>${seg('dir', [['rtl', 'Manga (destra → sinistra)'], ['ltr', 'Fumetto (sinistra → destra)']])}</div>
+    <div class="opt"><label>PAGINE</label>${seg('mode', [['auto', 'Automatico'], ['single', 'Singola'], ['double', 'Doppia']])}</div>
+    <div class="opt"><label>EFFETTO</label>${seg('effect', [['flip', 'Sfoglia'], ['slide', 'Scorri']])}</div>
+    <div class="opt" style="margin-bottom:0"><label>SFONDO</label>${seg('bg', [['black', 'Nero'], ['white', 'Bianco']])}</div>`);
+  $('#sheet').querySelectorAll('.seg').forEach(sg => sg.onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const k = sg.dataset.k; S[k] = b.dataset.v; saveSettings();
+    sg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    const page = Math.min(...R.views[R.vi]);
+    R.viewCache.clear();
+    applyLook(); buildViews(); R.vi = viewOf(page);
+    show(underCv, R.vi); updateUI(); prefetch();
+  });
+};
+
+/* ---------- schermo sempre acceso durante la lettura ---------- */
+let wake = null;
+async function keepAwake() { try { wake = await navigator.wakeLock?.request('screen'); } catch {} }
+function releaseAwake() { try { wake?.release(); } catch {} wake = null; }
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && R.pdf) keepAwake();
+  if (document.visibilityState === 'hidden' && R.pdf) saveProgress(true);
+});
+
+/* ================= avvio ================= */
+(async () => {
+  try {
+    await DB.open();
+    navigator.storage?.persist?.().catch(() => {});
+    renderLibrary();
+  } catch (e) {
+    $('#shelf').innerHTML = `<div class="empty"><h2>Archivio non disponibile</h2><p>Il browser non permette di salvare i file qui. Apri l'app da Safari o Chrome.</p></div>`;
+  }
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
