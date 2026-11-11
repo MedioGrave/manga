@@ -65,6 +65,38 @@ input[type=file]{display:none}
 .ghcover svg{width:16px;height:16px;flex:none}
 .note{font-size:13px;color:var(--muted);line-height:1.5;margin:-4px 0 16px}
 .note code{background:var(--bg);padding:1px 5px;border-radius:4px;color:var(--text)}
+.cont{display:flex;gap:14px;align-items:center;background:var(--panel);border-radius:14px;padding:12px;margin-bottom:28px;width:100%;text-align:left}
+.cont .th{width:60px;aspect-ratio:5/7;border-radius:4px;overflow:hidden;background:var(--panel2);flex:none;display:grid;place-items:center;color:var(--muted)}
+.cont .th img{width:100%;height:100%;object-fit:cover;display:block}
+.cont .ci{flex:1;min-width:0}
+.cont .k{font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--accent)}
+.cont .t{font-weight:700;font-size:16px;margin:3px 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cont .m{font-size:12px;color:var(--muted)}
+.pbar{height:4px;background:var(--line);border-radius:2px;margin-top:8px;overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--accent)}
+.cloudb{position:absolute;right:6px;bottom:10px;width:26px;height:26px;border-radius:50%;background:rgba(14,14,16,.78);display:grid;place-items:center;color:var(--text)}
+.cloudb svg{width:15px;height:15px}
+.readb{position:absolute;left:6px;top:6px;background:rgba(14,14,16,.85);color:#7ddc9a;font-size:10px;font-weight:800;padding:3px 6px;border-radius:3px;letter-spacing:.06em}
+.ph{position:absolute;inset:0;display:flex;align-items:flex-end;padding:10px;font-size:13px;font-weight:750;line-height:1.25;
+  background:repeating-linear-gradient(135deg,#1d1d21 0 10px,#19191c 10px 20px);word-break:break-word;text-align:left}
+.stack .cover{box-shadow:5px -5px 0 -1px #2b2b30,10px -10px 0 -2px #202024,0 8px 22px rgba(0,0,0,.55)}
+.stack{padding-top:10px;padding-right:10px}
+.shead{display:flex;align-items:center;gap:4px;margin:-8px 0 14px -12px}
+.stitle{font-size:24px;font-weight:850;letter-spacing:-.02em;line-height:1.1}
+.sacts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.pill{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:9px 13px;font-size:12.5px;font-weight:650;color:var(--text)}
+.list{display:flex;flex-direction:column}
+.row{display:flex;align-items:center;gap:13px;padding:10px 0;border-bottom:1px solid var(--line)}
+.row .th{width:50px;aspect-ratio:5/7;border-radius:4px;overflow:hidden;background:var(--panel);flex:none;position:relative;display:grid;place-items:center;font-size:12px;font-weight:800;color:var(--muted)}
+.row .th img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.row .ri{flex:1;min-width:0;text-align:left;display:block}
+.row .rt{font-weight:650;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .rm{font-size:12.5px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:5px}
+.row .rm svg{width:14px;height:14px}
+.row.read .rt{color:var(--muted)}
+.row .pbar{margin-top:6px;height:3px}
+.ok{color:#7ddc9a}
+.row .more{position:static;background:transparent;flex:none;color:var(--muted)}
 .dropping #library{outline:3px dashed var(--accent);outline-offset:-10px}
 
 /* ---------- LETTORE ---------- */
@@ -204,7 +236,7 @@ const $ = s => document.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 /* ================= impostazioni ================= */
-const DEF = { dir: 'rtl', mode: 'auto', effect: 'flip', bg: 'black', fit: 'width', crop: 'on', hintSeen: false };
+const DEF = { dir: 'rtl', mode: 'auto', effect: 'flip', bg: 'black', fit: 'width', crop: 'on', autoFree: 'on', hintSeen: false };
 let S = { ...DEF };
 try { S = { ...DEF, ...JSON.parse(localStorage.getItem('manga-settings') || '{}') }; } catch {}
 function saveSettings() { try { localStorage.setItem('manga-settings', JSON.stringify(S)); } catch {} }
@@ -254,7 +286,7 @@ function toast(t) {
   clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 2400);
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
-function fmtSize(b) { return b > 1e9 ? (b / 1e9).toFixed(1) + ' GB' : Math.round(b / 1e6) + ' MB'; }
+function fmtSize(b) { return b > 1e9 ? (b / 1e9).toFixed(1) + ' GB' : b < 1e6 ? (b ? '<1 MB' : '0 MB') : Math.round(b / 1e6) + ' MB'; }
 
 let sheetClose = null;
 function openSheet(html, onClose) {
@@ -270,59 +302,190 @@ function closeSheet() {
 $('#scrim').onclick = closeSheet;
 
 /* ================= libreria ================= */
-let books = [];
+const ICON_CLOUD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9a4 4 0 0 1 0 9z"/><path d="M12 11v6m-2.5-2.5L12 17l2.5-2.5"/></svg>';
+let LIB = [], libSeries = null;
+const seriesOf = p => { const parts = (p || '').replace(/\/$/, '').split('/'); return parts.length >= 2 ? parts[0] : null; };
+
+async function libraryItems() {
+  const local = await DB.all();
+  const known = new Set(local.map(b => b.path).filter(Boolean));
+  const items = local.map(b => ({
+    id: b.id, title: b.title, series: b.path ? seriesOf(b.path) : null, path: b.path || null, cover: b.cover,
+    pages: b.pages || 0, page: b.page || 0, read: !!b.read, lastRead: b.lastRead || 0, size: b.size || 0,
+    state: b.offloaded ? 'cloud' : 'local', book: b }));
+  for (const r of GH.remote) {
+    if (known.has(r.path)) continue;
+    const pr = GH.prog[r.path] || {};
+    items.push({ id: remoteId(r.path), title: r.title, series: seriesOf(r.path), path: r.path, cover: null,
+      pages: pr.pages || 0, page: pr.page || 0, read: !!pr.read, lastRead: pr.updated || 0, size: r.size, state: 'remote' });
+  }
+  return items;
+}
+const sortKey = i => i.path || i.title;
+const pct = i => i.read ? 100 : i.pages ? Math.round((i.page + 1) / i.pages * 100) : 0;
+function statusOf(i) {
+  if (i.read) return '<span class="ok">✓ Letto</span>';
+  if (i.lastRead && i.pages) return `p. ${i.page + 1} di ${i.pages}`;
+  if (i.state === 'remote') return `Da scaricare${i.size ? ' · ' + fmtSize(i.size) : ''}`;
+  if (i.state === 'cloud') return 'Su GitHub · tocca per scaricare';
+  return 'Da leggere';
+}
+
 async function renderLibrary() {
-  books = (await DB.all()).sort((a, b) => (b.lastRead || b.added) - (a.lastRead || a.added));
-  const total = books.reduce((s, b) => s + (b.size || 0), 0);
-  $('#libsub').textContent = books.length
-    ? `${books.length} ${books.length === 1 ? 'volume' : 'volumi'} · ${fmtSize(total)} sul telefono`
+  LIB = await libraryItems();
+  const onPhone = LIB.filter(i => i.state === 'local');
+  const total = onPhone.reduce((s, i) => s + i.size, 0);
+  $('#libsub').textContent = LIB.length
+    ? `${onPhone.length} sul telefono · ${fmtSize(total)}${GH.cfg ? ` · ${LIB.length - onPhone.length} su GitHub` : ''}`
     : 'La tua libreria';
-  const localPaths = new Set(books.map(b => b.path).filter(Boolean));
-  const remoteOnly = GH.remote.filter(r => !localPaths.has(r.path)).sort((a, b) => natural(a.title, b.title));
-  const cloudCard = r => `<div class="book">
-      <button class="cover" data-remote="${esc(r.path)}" style="width:100%;display:block">
-        <div class="ghcover"><b>${esc(r.title)}</b><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9a4 4 0 0 1 0 9z"/><path d="M12 11v6m-2.5-2.5L12 17l2.5-2.5"/></svg> ${r.size ? fmtSize(r.size) : (r.files ? r.files.length + ' pag.' : '')}</span></div>
-      </button>
-      <div class="btitle">${esc(r.title)}</div>
-      <div class="bmeta">Su GitHub · tocca per scaricare</div>
-    </div>`;
-  const card = (b, big) => {
-    const pct = b.pages ? Math.round(((b.page || 0) + 1) / b.pages * 100) : 0;
-    const status = !b.lastRead ? 'Nuovo' : (b.page >= b.pages - 1 ? 'Finito' : `p. ${b.page + 1} di ${b.pages}`);
-    return `<div class="book" data-id="${b.id}">
-      <button class="cover" data-open="${b.id}" style="width:100%;display:block">
-        ${b.cover ? `<img src="${b.cover}" alt="">` : ''}
-        ${!b.lastRead ? '<span class="badge">NUOVO</span>' : ''}
-        ${b.lastRead ? `<div class="prog"><i style="width:${pct}%"></i></div>` : ''}
-      </button>
-      <button class="more" data-more="${b.id}" aria-label="Opzioni">⋯</button>
-      <div class="btitle">${esc(b.title)}</div>
-      <div class="bmeta">${status}</div>
-    </div>`;
-  };
-  if (!books.length && !remoteOnly.length) {
+  if (libSeries) return renderSeries();
+  if (!LIB.length) {
     $('#continue').innerHTML = '';
     $('#shelf').innerHTML = `<div class="empty">
       <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#e5383b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5c3-1.5 6-1.5 10 1 4-2.5 7-2.5 10-1v14c-3-1.5-6-1.5-10 1-4-2.5-7-2.5-10-1z"/><path d="M12 6v14"/></svg>
       <h2>Nessun manga, ancora</h2>
-      <p>Tocca <b>Aggiungi</b> e scegli un PDF, un CBZ/ZIP<br>oppure tutte le immagini JPG di un volume.<br>Restano salvati sul telefono, anche offline.</p>
+      <p>Tocca <b>Aggiungi</b> e scegli un PDF, un CBZ/ZIP<br>oppure tutte le immagini JPG di un volume,<br>oppure collega il tuo repository GitHub.</p>
     </div>`;
     return;
   }
-  $('#continue').innerHTML = '';
+  // continua a leggere
+  const cur = LIB.filter(i => i.lastRead && !i.read).sort((a, b) => b.lastRead - a.lastRead)[0];
+  $('#continue').innerHTML = cur ? `<button class="cont" data-item="${cur.id}">
+      <div class="th">${cur.cover ? `<img src="${cur.cover}" alt="">` : ICON_CLOUD}</div>
+      <div class="ci"><div class="k">CONTINUA A LEGGERE</div><div class="t">${esc(cur.title)}</div>
+      <div class="m">${cur.series ? esc(cur.series) + ' · ' : ''}${statusOf(cur)}</div><div class="pbar"><i style="width:${pct(cur)}%"></i></div></div>
+    </button>` : '';
+  // serie
+  const groups = new Map();
+  for (const i of LIB) if (i.series) { if (!groups.has(i.series)) groups.set(i.series, []); groups.get(i.series).push(i); }
+  const series = [...groups.entries()].sort((a, b) => natural(a[0], b[0]));
+  const singles = LIB.filter(i => !i.series).sort((a, b) => (b.lastRead || 0) - (a.lastRead || 0) || natural(sortKey(a), sortKey(b)));
+  const seriesCard = ([name, list]) => {
+    list.sort((a, b) => natural(sortKey(a), sortKey(b)));
+    const cov = list.find(i => i.cover), nRead = list.filter(i => i.read).length;
+    const allRead = nRead === list.length;
+    return `<div class="book stack"><button class="cover" data-series="${esc(name)}" style="width:100%;display:block">
+        ${cov ? `<img src="${cov.cover}" alt="">` : `<div class="ph">${esc(name)}</div>`}
+        ${allRead ? '<span class="readb">✓ LETTO</span>' : ''}
+      </button>
+      <div class="btitle">${esc(name)}</div>
+      <div class="bmeta">${list.length} ${list.length === 1 ? 'capitolo' : 'capitoli'} · ${nRead} letti</div></div>`;
+  };
+  const card = i => `<div class="book">
+      <button class="cover" data-item="${i.id}" style="width:100%;display:block">
+        ${i.cover ? `<img src="${i.cover}" alt="">` : `<div class="ph">${esc(i.title)}</div>`}
+        ${i.read ? '<span class="readb">✓ LETTO</span>' : (!i.lastRead && i.state === 'local' ? '<span class="badge">NUOVO</span>' : '')}
+        ${i.lastRead && !i.read ? `<div class="prog"><i style="width:${pct(i)}%"></i></div>` : ''}
+        ${i.state !== 'local' ? `<span class="cloudb">${ICON_CLOUD}</span>` : ''}
+      </button>
+      <button class="more" data-more="${i.id}" aria-label="Opzioni">⋯</button>
+      <div class="btitle">${esc(i.title)}</div>
+      <div class="bmeta">${statusOf(i)}</div></div>`;
   $('#shelf').innerHTML =
-    (books.length ? `<div class="section">Sul telefono</div><div class="grid">${books.map(b => card(b)).join('')}</div>` : '') +
-    (remoteOnly.length ? `<div class="section" style="margin-top:${books.length ? 34 : 6}px">Su GitHub</div><div class="grid">${remoteOnly.map(cloudCard).join('')}</div>` : '');
+    (series.length ? `<div class="section">Serie</div><div class="grid">${series.map(seriesCard).join('')}</div>` : '') +
+    (singles.length ? `<div class="section" style="margin-top:${series.length ? 34 : 0}px">Volumi</div><div class="grid">${singles.map(card).join('')}</div>` : '');
 }
 
-$('#shelf').addEventListener('click', e => {
-  const more = e.target.closest('[data-more]');
-  if (more) return bookMenu(more.dataset.more);
-  const op = e.target.closest('[data-open]');
-  if (op) openBook(op.dataset.open);
-  const rm = e.target.closest('[data-remote]');
-  if (rm) downloadRemote(rm.dataset.remote);
+function renderSeries() {
+  const list = LIB.filter(i => i.series === libSeries).sort((a, b) => natural(sortKey(a), sortKey(b)));
+  if (!list.length) { libSeries = null; return renderLibrary(); }
+  const nRead = list.filter(i => i.read).length;
+  const freeable = list.filter(i => i.read && i.state === 'local' && i.path).length;
+  const next = list.find(i => !i.read);
+  $('#continue').innerHTML = '';
+  $('#shelf').innerHTML = `<div class="shead"><button class="ibtn" data-up aria-label="Indietro">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div><div class="stitle">${esc(libSeries)}</div><div class="sub" style="margin-top:4px">${list.length} capitoli · ${nRead} letti</div></div></div>
+    <div class="sacts">
+      ${next ? `<button class="pill" data-item="${next.id}">▶ ${next.lastRead ? 'Continua' : 'Leggi'}: ${esc(next.title)}</button>` : ''}
+      ${freeable ? `<button class="pill" data-freeseries>Togli i ${freeable} letti dal telefono</button>` : ''}
+    </div>
+    <div class="list">${list.map(i => `<div class="row${i.read ? ' read' : ''}">
+      <button class="th" data-item="${i.id}">${i.cover ? `<img src="${i.cover}" alt="">` : ''}</button>
+      <button class="ri" data-item="${i.id}"><div class="rt">${esc(i.title)}</div>
+        <div class="rm">${i.state !== 'local' ? ICON_CLOUD : ''}${statusOf(i)}${i.state === 'local' && i.size ? ` · ${fmtSize(i.size)}` : ''}</div>
+        ${i.lastRead && !i.read ? `<div class="pbar"><i style="width:${pct(i)}%"></i></div>` : ''}</button>
+      <button class="ibtn more" data-more="${i.id}" aria-label="Opzioni">⋯</button></div>`).join('')}</div>`;
+}
+
+$('#library').addEventListener('click', e => {
+  const t = e.target;
+  const more = t.closest('[data-more]'); if (more) return itemMenu(more.dataset.more);
+  const it = t.closest('[data-item]'); if (it) return openItem(it.dataset.item);
+  const se = t.closest('[data-series]');
+  if (se) { libSeries = se.dataset.series; history.pushState({ series: libSeries }, ''); window.scrollTo(0, 0); return renderLibrary(); }
+  if (t.closest('[data-up]')) return history.back();
+  if (t.closest('[data-freeseries]')) return freeSpace(i => i.series === libSeries && i.read);
 });
+
+async function openItem(id) {
+  const i = LIB.find(x => x.id === id);
+  if (!i) return;
+  if (i.state === 'local') return openBook(id);
+  if (!GH.cfg) return toast('Collega GitHub per scaricarlo');
+  return downloadRemote(i.path);
+}
+
+// il volume resta in libreria (copertina, segnalibro, letto) ma il file esce dal telefono
+async function offload(book) {
+  if (!book || !book.path || book.offloaded) return;
+  await DB.tx('files', 'readwrite', st => st.delete(book.id));
+  book.offloaded = true;
+  await DB.put(book);
+}
+async function freeSpace(pred) {
+  const list = LIB.filter(i => i.state === 'local' && i.path && pred(i));
+  if (!list.length) return toast('Niente da togliere');
+  const size = list.reduce((s, i) => s + i.size, 0);
+  for (const i of list) await offload(i.book);
+  toast(`Liberati ${fmtSize(size)} · restano su GitHub`);
+  renderLibrary();
+}
+async function stubFor(i) { // record minimo per un volume mai scaricato su questo telefono
+  if (i.book) return i.book;
+  const b = { id: i.id, title: i.title, path: i.path, kind: null, pages: i.pages, page: i.page, added: Date.now(),
+    lastRead: i.lastRead, cover: null, size: i.size, offloaded: true, read: i.read };
+  await DB.put(b); return b;
+}
+async function setRead(i, val) {
+  const b = await stubFor(i);
+  b.read = val;
+  b.page = val ? Math.max(0, (b.pages || 1) - 1) : 0;
+  b.lastRead = Date.now();
+  await DB.put(b);
+  if (b.path) GH.pushSoon(0);
+  if (val && S.autoFree !== 'off' && b.path && !b.offloaded) { await offload(b); toast('Segnato come letto e tolto dal telefono'); }
+  else toast(val ? 'Segnato come letto' : 'Segnato come da leggere');
+  renderLibrary();
+}
+
+function itemMenu(id) {
+  const i = LIB.find(x => x.id === id); if (!i) return;
+  const acts = [['open', i.state === 'local' ? 'Leggi' : 'Scarica e leggi']];
+  acts.push(i.read ? ['unread', 'Segna come da leggere'] : ['read', 'Segna come letto']);
+  if (i.book && i.lastRead) acts.push(['restart', 'Ricomincia dall\'inizio']);
+  if (i.state !== 'local' && i.path) acts.push(['get', 'Scarica sul telefono']);
+  if (i.state === 'local' && i.path) acts.push(['free', `Togli dal telefono (resta su GitHub)${i.size ? ' · ' + fmtSize(i.size) : ''}`]);
+  if (i.book && !i.path) acts.push(['rename', 'Rinomina']);
+  if (i.book && !i.path) acts.push(['del', 'Elimina dal telefono', 'danger']);
+  openSheet(`<h3>${esc(i.title)}</h3><div class="menu">${acts.map(([a, l, c]) => `<button data-a="${a}" class="${c || ''}">${l}</button>`).join('')}</div>`);
+  $('#sheet').querySelectorAll('[data-a]').forEach(btn => btn.onclick = async () => {
+    const a = btn.dataset.a; closeSheet();
+    if (a === 'open') openItem(id);
+    if (a === 'read') setRead(i, true);
+    if (a === 'unread') setRead(i, false);
+    if (a === 'restart') { i.book.page = 0; i.book.read = false; i.book.lastRead = Date.now(); await DB.put(i.book); if (i.path) GH.pushSoon(0); openItem(id); }
+    if (a === 'get') downloadRemote(i.path, false);
+    if (a === 'free') { await offload(i.book); toast(`Tolto dal telefono · resta su GitHub`); renderLibrary(); }
+    if (a === 'rename') setTimeout(() => renameSheet(i.book), 300);
+    if (a === 'del') setTimeout(() => {
+      openSheet(`<h3>Eliminare "${esc(i.title)}"?</h3><p style="color:var(--muted);font-size:14px;margin:-6px 0 18px">Viene tolto dal telefono.</p>
+        <div class="row2"><button class="btn2" data-x>Annulla</button><button class="btn1" data-ok>Elimina</button></div>`);
+      $('#sheet [data-x]').onclick = closeSheet;
+      $('#sheet [data-ok]').onclick = async () => { closeSheet(); await DB.del(id); renderLibrary(); toast('Eliminato'); };
+    }, 300);
+  });
+}
 
 function renameSheet(b, head = 'Rinomina') {
   openSheet(`<h3>${head}</h3><input id="renIn" class="field" value="${esc(b.title)}">
@@ -331,27 +494,6 @@ function renameSheet(b, head = 'Rinomina') {
   const save = async () => { const t = inp.value.trim(); closeSheet(); if (t) { b.title = t; await DB.put(b); renderLibrary(); } };
   $('#sheet [data-ok]').onclick = save; $('#sheet [data-x]').onclick = closeSheet;
   inp.onkeydown = e => { if (e.key === 'Enter') save(); };
-}
-
-function bookMenu(id) {
-  const b = books.find(x => x.id === id); if (!b) return;
-  openSheet(`<h3>${esc(b.title)}</h3><div class="menu">
-    <button data-a="open">Leggi</button>
-    <button data-a="restart">Ricomincia dall'inizio</button>
-    <button data-a="rename">Rinomina</button>
-    <button data-a="del" class="danger">Elimina dal telefono</button></div>`);
-  $('#sheet').querySelectorAll('[data-a]').forEach(btn => btn.onclick = async () => {
-    const a = btn.dataset.a; closeSheet();
-    if (a === 'open') openBook(id);
-    if (a === 'restart') { b.page = 0; await DB.put(b); openBook(id); }
-    if (a === 'rename') setTimeout(() => renameSheet(b), 300);
-    if (a === 'del') setTimeout(() => {
-      openSheet(`<h3>Eliminare "${esc(b.title)}"?</h3><p style="color:var(--muted);font-size:14px;margin:-6px 0 18px">${b.path ? 'Viene tolto dal telefono ma resta su GitHub: puoi riscaricarlo quando vuoi.' : 'Viene tolto dal telefono.'}</p>
-        <div class="row2"><button class="btn2" data-x>Annulla</button><button class="btn1" data-ok>Elimina</button></div>`);
-      $('#sheet [data-x]').onclick = closeSheet;
-      $('#sheet [data-ok]').onclick = async () => { closeSheet(); await DB.del(id); renderLibrary(); toast('Eliminato'); };
-    }, 300);
-  });
 }
 
 /* ---------- import ---------- */
@@ -694,8 +836,8 @@ async function openBook(id) {
     book.lastRead = Date.now();
     DB.put(book);
     $('#rtitle').textContent = book.title;
+    if (!$('#reader').classList.contains('on')) history.pushState({ reader: true }, '');
     $('#reader').classList.add('on');
-    history.pushState({ reader: true }, '');
     applyLook();
     resetZoom(false);
     buildViews();
@@ -708,7 +850,7 @@ async function openBook(id) {
     keepAwake();
     if (!S.hintSeen) showHint(); else flashUI();
   } catch (e) {
-    console.error(e); loading(''); toast('Errore nell\'apertura del volume');
+    console.error(e); loading(''); toast('Errore nell\'apertura del volume'); leaveBrokenReader();
   }
 }
 
@@ -718,22 +860,62 @@ async function closeReader(fromPop) {
   if (R.book) R.book.crops = R.cropsDone;
   saveProgress(true);
   $('#reader').classList.remove('on', 'ui');
-  const doc = R.pdf; R.pdf = null;
+  const doc = R.pdf, book = R.book; R.pdf = null;
   R.pageCache.clear(); R.viewCache.clear();
   underCv.width = underCv.height = flipCv.width = flipCv.height = 1;
   releaseAwake();
   try { await doc.destroy(); } catch {}
+  await autoFree(book);
   if (!fromPop && history.state && history.state.reader) history.back();
   renderLibrary();
 }
-window.addEventListener('popstate', () => { if ($('#reader').classList.contains('on')) closeReader(true); });
+window.addEventListener('popstate', e => {
+  if ($('#reader').classList.contains('on')) return closeReader(true);
+  const sr = (e.state && e.state.series) || null;
+  if (sr !== libSeries) { libSeries = sr; window.scrollTo(0, 0); renderLibrary(); }
+});
+async function autoFree(book) {
+  if (book && book.read && book.path && !book.offloaded && S.autoFree !== 'off') {
+    await offload(book); toast('Volume letto tolto dal telefono · resta su GitHub');
+  }
+}
+function leaveBrokenReader() {
+  if ($('#reader').classList.contains('on') && !R.pdf) {
+    $('#reader').classList.remove('on', 'ui');
+    if (history.state && history.state.reader) history.back();
+    renderLibrary();
+  }
+}
+// capitolo successivo della stessa serie
+function nextChapter() {
+  if (!R.book || !R.book.path) return null;
+  const sr = seriesOf(R.book.path); if (!sr) return null;
+  const list = LIB.filter(i => i.series === sr).sort((a, b) => natural(sortKey(a), sortKey(b)));
+  const k = list.findIndex(i => i.path === R.book.path);
+  return k >= 0 ? list[k + 1] || null : null;
+}
+async function goNext(item) {
+  finishNow();
+  if (R.book) R.book.crops = R.cropsDone;
+  saveProgress(true);
+  const doc = R.pdf, book = R.book; R.pdf = null;
+  R.pageCache.clear(); R.viewCache.clear();
+  try { await doc.destroy(); } catch {}
+  await autoFree(book);
+  LIB = await libraryItems();
+  const it = LIB.find(x => x.path === item.path) || item;
+  if (it.state === 'local') await openBook(it.id); else await downloadRemote(it.path);
+}
 $('#backBtn').onclick = () => closeReader(false);
 
 let saveT;
 function saveProgress(now) {
   if (!R.book) return;
   R.book.page = Math.min(...R.views[R.vi]);
-  if (R.vi === R.views.length - 1) R.book.page = R.pdf ? R.pdf.numPages - 1 : R.book.page;
+  if (R.vi === R.views.length - 1) {
+    R.book.page = R.pdf ? R.pdf.numPages - 1 : R.book.page;
+    if (!R.book.read) { R.book.read = true; toast('Volume finito ✓ segnato come letto'); }
+  }
   R.book.lastRead = Date.now();
   clearTimeout(saveT);
   const b = { ...R.book };
@@ -799,7 +981,13 @@ function startFlip(forward) {
   if (target < 0 || target >= R.views.length) {
     const fwdSide = S.dir === 'rtl' ? 'left' : 'right';
     const side = forward ? fwdSide : (fwdSide === 'left' ? 'right' : 'left');
-    endcap(forward ? 'Fine del volume' : 'Sei alla prima pagina', side);
+    const nx = forward && nextChapter();
+    if (nx) {
+      openSheet(`<h3>Fine di ${esc(R.book.title)}</h3><p class="note">Prossimo capitolo: <b style="color:var(--text)">${esc(nx.title)}</b>${nx.state !== 'local' ? ' (si scarica da GitHub)' : ''}</p>
+        <div class="row2"><button class="btn2" data-x>Resta qui</button><button class="btn1" data-ok>Leggi ›</button></div>`);
+      $('#sheet [data-x]').onclick = closeSheet;
+      $('#sheet [data-ok]').onclick = () => { closeSheet(); goNext(nx); };
+    } else endcap(forward ? 'Fine del volume' : 'Sei alla prima pagina', side);
     return null;
   }
   const effect = isDouble() ? 'slide' : S.effect;
@@ -1094,11 +1282,12 @@ const b64dec = b => decodeURIComponent(escape(atob(b.replace(/\s/g, ''))));
 const remoteId = p => 'gh_' + Array.from(p).reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36) + '_' + p.length;
 
 const GH = {
-  cfg: null, remote: [], branch: null, busy: false, pushT: null, pushing: null,
+  cfg: null, remote: [], prog: {}, branch: null, busy: false, pushT: null, pushing: null,
   load() {
     try { this.cfg = JSON.parse(localStorage.getItem('manga-gh') || 'null'); } catch { this.cfg = null; }
     try { this.remote = JSON.parse(localStorage.getItem('manga-gh-remote') || '[]'); } catch { this.remote = []; }
-    if (!this.cfg) this.remote = [];
+    try { this.prog = JSON.parse(localStorage.getItem('manga-gh-prog') || '{}'); } catch { this.prog = {}; }
+    if (!this.cfg) { this.remote = []; this.prog = {}; }
   },
   save() { try { localStorage.setItem('manga-gh', JSON.stringify(this.cfg)); } catch {} },
   async api(path, opts = {}) {
@@ -1157,12 +1346,15 @@ const GH = {
       for (const b of local) {
         const rp = data[b.path];
         if (rp && rp.updated > (b.lastRead || 0)) {
-          b.page = rp.page; b.lastRead = rp.updated; await DB.put(b); changedLocal = true;
-          if (R.book && R.book.id === b.id) { R.book.page = b.page; R.book.lastRead = b.lastRead; }
+          b.page = rp.page; b.lastRead = rp.updated; b.read = !!rp.read; if (!b.pages && rp.pages) b.pages = rp.pages;
+          await DB.put(b); changedLocal = true;
+          if (R.book && R.book.id === b.id) { R.book.page = b.page; R.book.lastRead = b.lastRead; R.book.read = b.read; }
         } else if (b.lastRead && (!rp || rp.updated < b.lastRead)) {
-          data[b.path] = { page: b.page, pages: b.pages, updated: b.lastRead }; changedRemote = true;
+          data[b.path] = { page: b.page, pages: b.pages, read: !!b.read, updated: b.lastRead }; changedRemote = true;
         }
       }
+      this.prog = data;
+      try { localStorage.setItem('manga-gh-prog', JSON.stringify(data)); } catch {}
       if (!changedRemote) return changedLocal;
       const body = JSON.stringify({ message: 'Aggiorna segnalibri', content: b64enc(JSON.stringify(data, null, 1)), ...(sha ? { sha } : {}) });
       const w = await this.api('/contents/progress.json', { method: 'PUT', body, headers: { 'Content-Type': 'application/json' } });
@@ -1222,13 +1414,25 @@ $('#ghBtn').onclick = () => {
   if (!GH.cfg) return ghSetup();
   openSheet(`<h3>GitHub</h3><p class="note">Collegato a <code>${esc(GH.cfg.owner)}/${esc(GH.cfg.repo)}</code>.<br>
     Metti i volumi (PDF, CBZ/ZIP o cartelle di JPG) nel repository dal computer: compaiono qui in "Su GitHub".</p>
-    <div class="menu"><button data-a="sync">Sincronizza ora</button><button data-a="edit">Modifica collegamento</button>
+    <div class="opt"><label>QUANDO FINISCO UN VOLUME</label><div class="seg" data-k="autoFree">
+      <button data-v="on" class="${S.autoFree !== 'off' ? 'on' : ''}">Toglilo dal telefono</button><button data-v="off" class="${S.autoFree === 'off' ? 'on' : ''}">Tienilo</button></div></div>
+    <div class="menu"><button data-a="sync">Sincronizza ora</button>
+    <button data-a="freeRead">Libera spazio: togli i volumi letti</button>
+    <button data-a="freeAll">Libera spazio: togli tutti i volumi di GitHub</button>
+    <button data-a="edit">Modifica collegamento</button>
     <button data-a="off" class="danger">Scollega</button></div>`);
+  $('#sheet .seg').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    S.autoFree = b.dataset.v; saveSettings();
+    $('#sheet .seg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  };
   $('#sheet').querySelectorAll('[data-a]').forEach(btn => btn.onclick = () => {
     const a = btn.dataset.a; closeSheet();
     if (a === 'sync') GH.sync(false).then(() => !GH.err && toast('Libreria aggiornata'));
     if (a === 'edit') setTimeout(ghSetup, 300);
-    if (a === 'off') { GH.cfg = null; GH.remote = []; GH.branch = null; try { localStorage.removeItem('manga-gh'); localStorage.removeItem('manga-gh-remote'); } catch {} ghButton(); renderLibrary(); }
+    if (a === 'freeRead') freeSpace(i => i.read);
+    if (a === 'freeAll') freeSpace(() => true);
+    if (a === 'off') { GH.cfg = null; GH.remote = []; GH.branch = null; GH.prog = {}; try { localStorage.removeItem('manga-gh'); localStorage.removeItem('manga-gh-remote'); localStorage.removeItem('manga-gh-prog'); } catch {} ghButton(); renderLibrary(); }
   });
 };
 
@@ -1268,7 +1472,7 @@ function ghSetup() {
   };
 }
 
-async function downloadRemote(path) {
+async function downloadRemote(path, open = true) {
   const item = GH.remote.find(r => r.path === path);
   if (!item || !GH.cfg) return;
   loading(`Scarico ${item.title}…`);
@@ -1277,7 +1481,10 @@ async function downloadRemote(path) {
       $('#loadtxt').textContent = `Scarico ${item.title}… ${tot ? Math.min(100, Math.round(got / tot * 100)) : ''}%`;
     });
     $('#loadtxt').textContent = `Preparo ${item.title}…`;
-    const id = remoteId(item.path), extra = { path: item.path, sha: item.sha };
+    const id = remoteId(item.path);
+    const prev = await DB.get(id);
+    const extra = { path: item.path, sha: item.sha, offloaded: false,
+      ...(prev ? { page: prev.page || 0, lastRead: prev.lastRead || 0, read: !!prev.read, crops: prev.crops, added: prev.added || Date.now() } : {}) };
     let book;
     if (item.type === 'pdf') {
       const buf = await blobs[0].arrayBuffer();
@@ -1297,11 +1504,12 @@ async function downloadRemote(path) {
     }
     loading('');
     try { await GH.syncProgress(); } catch {}
-    await renderLibrary();
-    openBook(book.id);
+    if (open) await openBook(book.id);
+    else { toast('Scaricato sul telefono'); renderLibrary(); }
   } catch (e) {
     console.error(e); loading('');
     toast('Download non riuscito: controlla la connessione');
+    leaveBrokenReader();
   }
 }
 
