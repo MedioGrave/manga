@@ -32,6 +32,12 @@ input[type=file]{display:none}
 .brand{font-size:36px;font-weight:900;letter-spacing:-.03em;line-height:.95}
 .brand b{color:var(--accent)}
 .sub{color:var(--muted);font-size:13px;margin-top:8px}
+.sechead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.sechead .section{margin-bottom:12px}
+.sortbtn{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;color:var(--muted);padding:6px 10px;margin:0 -6px 6px 0;border-radius:8px}
+.sortbtn b{color:var(--text);font-weight:650}
+.sortbtn:active{background:var(--panel)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:-4px 0 16px}
 .section{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:6px 0 12px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:22px 14px}
 .book{position:relative;text-align:left;display:block;width:100%}
@@ -288,7 +294,7 @@ const $ = s => document.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 /* ================= impostazioni ================= */
-const DEF = { dir: 'rtl', mode: 'auto', effect: 'flip', bg: 'black', fit: 'width', crop: 'on', autoFree: 'on', hintSeen: false };
+const DEF = { dir: 'rtl', mode: 'auto', effect: 'flip', bg: 'black', fit: 'width', crop: 'on', autoFree: 'on', sort: 'name', chOrder: 'asc', hintSeen: false };
 let S = { ...DEF };
 try { S = { ...DEF, ...JSON.parse(localStorage.getItem('manga-settings') || '{}') }; } catch {}
 function saveSettings() { try { localStorage.setItem('manga-settings', JSON.stringify(S)); } catch {} }
@@ -362,7 +368,7 @@ async function libraryItems() {
   const local = await DB.all();
   const known = new Set(local.map(b => b.path).filter(Boolean));
   const items = local.map(b => ({
-    id: b.id, title: b.title, series: b.path ? seriesOf(b.path) : null, path: b.path || null, cover: b.cover,
+    id: b.id, title: b.title, series: b.path ? seriesOf(b.path) : (b.series || null), path: b.path || null, cover: b.cover, added: b.added || 0,
     pages: b.pages || 0, page: b.page || 0, read: !!b.read, lastRead: b.lastRead || 0, size: b.size || 0,
     state: b.offloaded ? 'cloud' : 'local', book: b }));
   for (const r of GH.remote) {
@@ -373,7 +379,24 @@ async function libraryItems() {
   }
   return items;
 }
-const sortKey = i => i.path || i.title;
+const sortKey = i => i.path || ((i.series ? i.series + '/' : '') + i.title);
+const SORTS = { name: 'Nome', recent: 'Letti di recente', added: 'Aggiunti di recente' };
+const byName = (a, b) => natural(sortKey(a), sortKey(b));
+function sortItems(list) {
+  if (S.sort === 'recent') return list.sort((a, b) => (b.lastRead || 0) - (a.lastRead || 0) || byName(a, b));
+  if (S.sort === 'added') return list.sort((a, b) => (b.added || 0) - (a.added || 0) || byName(a, b));
+  return list.sort(byName);
+}
+// "Berserk 57", "Berserk Vol. 58", "Berserk_cap_59" -> "Berserk"
+function guessSeries(title) {
+  const t = title.replace(/[\s_\-.#]*(vol(ume)?|v|tomo|cap(itolo)?|ch(apter)?|c|n|numero|ep(isodio)?)?[\s_\-.#]*\d+([.,]\d+)?\s*(\(.*\)|\[.*\])?\s*$/i, '').trim();
+  return t && t !== title && t.length >= 2 ? t : null;
+}
+function sortSheet() {
+  openSheet(`<h3>Ordina la libreria</h3><div class="menu">${Object.entries(SORTS).map(([k, l]) =>
+    `<button data-s="${k}">${l}${S.sort === k ? ' <span style="margin-left:auto;color:var(--accent)">✓</span>' : ''}</button>`).join('')}</div>`);
+  $('#sheet').querySelectorAll('[data-s]').forEach(b => b.onclick = () => { S.sort = b.dataset.s; saveSettings(); closeSheet(); renderLibrary(); });
+}
 const pct = i => i.read ? 100 : i.pages ? Math.round((i.page + 1) / i.pages * 100) : 0;
 function statusOf(i) {
   if (i.read) return '<span class="ok">✓ Letto</span>';
@@ -410,8 +433,13 @@ async function renderLibrary() {
   // serie
   const groups = new Map();
   for (const i of LIB) if (i.series) { if (!groups.has(i.series)) groups.set(i.series, []); groups.get(i.series).push(i); }
-  const series = [...groups.entries()].sort((a, b) => natural(a[0], b[0]));
-  const singles = LIB.filter(i => !i.series).sort((a, b) => (b.lastRead || 0) - (a.lastRead || 0) || natural(sortKey(a), sortKey(b)));
+  let series = [...groups.entries()];
+  const agg = (list, f) => Math.max(0, ...list.map(f));
+  if (S.sort === 'recent') series.sort((a, b) => agg(b[1], i => i.lastRead || 0) - agg(a[1], i => i.lastRead || 0) || natural(a[0], b[0]));
+  else if (S.sort === 'added') series.sort((a, b) => agg(b[1], i => i.added || 0) - agg(a[1], i => i.added || 0) || natural(a[0], b[0]));
+  else series.sort((a, b) => natural(a[0], b[0]));
+  const singles = sortItems(LIB.filter(i => !i.series));
+  const sortBtn = `<button class="sortbtn" data-sort>Ordina: <b>${SORTS[S.sort] || 'Nome'}</b> ▾</button>`;
   const seriesCard = ([name, list]) => {
     list.sort((a, b) => natural(sortKey(a), sortKey(b)));
     const cov = list.find(i => i.cover), nRead = list.filter(i => i.read).length;
@@ -434,21 +462,23 @@ async function renderLibrary() {
       <div class="btitle">${esc(i.title)}</div>
       <div class="bmeta">${statusOf(i)}</div></div>`;
   $('#shelf').innerHTML =
-    (series.length ? `<div class="section">Serie</div><div class="grid">${series.map(seriesCard).join('')}</div>` : '') +
-    (singles.length ? `<div class="section" style="margin-top:${series.length ? 34 : 0}px">Volumi</div><div class="grid">${singles.map(card).join('')}</div>` : '');
+    (series.length ? `<div class="sechead"><div class="section">Serie</div>${sortBtn}</div><div class="grid">${series.map(seriesCard).join('')}</div>` : '') +
+    (singles.length ? `<div class="sechead" style="margin-top:${series.length ? 34 : 0}px"><div class="section">Volumi</div>${series.length ? '' : sortBtn}</div><div class="grid">${singles.map(card).join('')}</div>` : '');
 }
 
 function renderSeries() {
-  const list = LIB.filter(i => i.series === libSeries).sort((a, b) => natural(sortKey(a), sortKey(b)));
+  const list = LIB.filter(i => i.series === libSeries).sort(byName);
+  if (S.chOrder === 'desc') list.reverse();
   if (!list.length) { libSeries = null; return renderLibrary(); }
   const nRead = list.filter(i => i.read).length;
   const freeable = list.filter(i => i.read && i.state === 'local' && i.path).length;
-  const next = list.find(i => !i.read);
+  const next = [...list].sort(byName).find(i => !i.read);
   $('#continue').innerHTML = '';
   $('#shelf').innerHTML = `<div class="shead"><button class="ibtn" data-up aria-label="Indietro">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
       <div><div class="stitle">${esc(libSeries)}</div><div class="sub" style="margin-top:4px">${list.length} capitoli · ${nRead} letti</div></div></div>
     <div class="sacts">
+      <button class="pill" data-chorder>${S.chOrder === 'desc' ? '↓ Dal più recente' : '↑ Dal primo'}</button>
       ${next ? `<button class="pill" data-item="${next.id}">▶ ${next.lastRead ? 'Continua' : 'Leggi'}: ${esc(next.title)}</button>` : ''}
       ${freeable ? `<button class="pill" data-freeseries>Togli i ${freeable} letti dal telefono</button>` : ''}
     </div>
@@ -467,6 +497,8 @@ $('#library').addEventListener('click', e => {
   const se = t.closest('[data-series]');
   if (se) { libSeries = se.dataset.series; history.pushState({ series: libSeries }, ''); window.scrollTo(0, 0); return renderLibrary(); }
   if (t.closest('[data-up]')) return history.back();
+  if (t.closest('[data-sort]')) return sortSheet();
+  if (t.closest('[data-chorder]')) { S.chOrder = S.chOrder === 'desc' ? 'asc' : 'desc'; saveSettings(); return renderLibrary(); }
   if (t.closest('[data-freeseries]')) return freeSpace(i => i.series === libSeries && i.read);
 });
 
@@ -518,6 +550,7 @@ function itemMenu(id) {
   if (i.book && i.lastRead) acts.push(['restart', 'Ricomincia dall\'inizio']);
   if (i.state !== 'local' && i.path) acts.push(['get', 'Scarica sul telefono']);
   if (i.state === 'local' && i.path) acts.push(['free', `Togli dal telefono (resta su GitHub)${i.size ? ' · ' + fmtSize(i.size) : ''}`]);
+  if (i.book && !i.path) acts.push(['series', i.series ? `Serie: ${esc(i.series)} · cambia` : 'Metti in una serie…']);
   if (i.book && !i.path) acts.push(['rename', 'Rinomina']);
   if (i.book && !i.path) acts.push(['del', 'Elimina dal telefono', 'danger']);
   openSheet(`<h3>${esc(i.title)}</h3><div class="menu">${acts.map(([a, l, c]) => `<button data-a="${a}" class="${c || ''}">${l}</button>`).join('')}</div>`);
@@ -530,6 +563,7 @@ function itemMenu(id) {
     if (a === 'get') downloadRemote(i.path, false);
     if (a === 'free') { await offload(i.book); toast(`Tolto dal telefono · resta su GitHub`); renderLibrary(); }
     if (a === 'rename') setTimeout(() => renameSheet(i.book), 300);
+    if (a === 'series') setTimeout(() => seriesSheet(i.book), 300);
     if (a === 'del') setTimeout(() => {
       openSheet(`<h3>Eliminare "${esc(i.title)}"?</h3><p style="color:var(--muted);font-size:14px;margin:-6px 0 18px">Viene tolto dal telefono.</p>
         <div class="row2"><button class="btn2" data-x>Annulla</button><button class="btn1" data-ok>Elimina</button></div>`);
@@ -537,6 +571,44 @@ function itemMenu(id) {
       $('#sheet [data-ok]').onclick = async () => { closeSheet(); await DB.del(id); renderLibrary(); toast('Eliminato'); };
     }, 300);
   });
+}
+
+function seriesSheet(b) {
+  const names = [...new Set(LIB.map(i => i.series).filter(Boolean))].sort(natural);
+  const guess = b.series || guessSeries(b.title) || '';
+  openSheet(`<h3>Metti in una serie</h3>
+    ${names.length ? `<div class="chips">${names.map(n => `<button class="pill" data-n="${esc(n)}">${esc(n)}</button>`).join('')}</div>` : ''}
+    <input id="serIn" class="field" placeholder="Nome della serie" value="${esc(guess)}">
+    <div class="row2"><button class="btn2" data-none>${b.series ? 'Togli dalla serie' : 'Annulla'}</button><button class="btn1" data-ok>Salva</button></div>`);
+  const save = async v => { closeSheet(); b.series = v || null; await DB.put(b); renderLibrary(); if (v) toast(`Spostato in ${v}`); };
+  $('#sheet').querySelectorAll('[data-n]').forEach(c => c.onclick = () => save(c.dataset.n));
+  $('#sheet [data-ok]').onclick = () => save($('#serIn').value.trim());
+  $('#sheet [data-none]').onclick = () => b.series ? save(null) : closeSheet();
+}
+
+// all'import: se il nome somiglia a una serie esistente (o a un altro volume) li raggruppa
+async function autoSeries(book) {
+  const g = guessSeries(book.title); if (!g) return;
+  const all = await libraryItems();
+  const exist = [...new Set(all.map(i => i.series).filter(Boolean))].find(n => n.toLowerCase() === g.toLowerCase());
+  if (exist) { book.series = exist; await DB.put(book); return; }
+  const twins = all.filter(i => i.book && !i.path && !i.series && i.id !== book.id && (guessSeries(i.title) || '').toLowerCase() === g.toLowerCase());
+  if (twins.length) {
+    book.series = g; await DB.put(book);
+    for (const t of twins) { t.book.series = g; await DB.put(t.book); }
+  }
+}
+
+// una volta sola: raggruppa i volumi già caricati dal telefono con lo stesso nome di serie
+async function groupExisting() {
+  if (S.grouped) return;
+  const all = await libraryItems(), m = new Map();
+  for (const i of all) if (i.book && !i.path && !i.series) {
+    const g = guessSeries(i.title); if (!g) continue;
+    const k = g.toLowerCase(); if (!m.has(k)) m.set(k, { g, l: [] }); m.get(k).l.push(i);
+  }
+  for (const { g, l } of m.values()) if (l.length >= 2) for (const i of l) { i.book.series = g; await DB.put(i.book); }
+  S.grouped = true; saveSettings();
 }
 
 function renameSheet(b, head = 'Rinomina') {
@@ -696,6 +768,7 @@ async function importFiles(files) {
         const blob = new Blob([buf], { type: 'application/pdf' });
         const doc = await openPdfDoc(buf);
         last = await saveVolume({ title: cleanTitle(f.name), kind: 'pdf', data: blob, doc, size: f.size });
+        await autoSeries(last);
         await doc.destroy();
       } else if (type === 'zip') {
         const u8 = new Uint8Array(await f.arrayBuffer());
@@ -704,6 +777,7 @@ async function importFiles(files) {
         if (!names.length) throw new Error('nessuna immagine nello zip');
         const blobs = names.map(n => new Blob([entries[n]], { type: mimeOf(n) }));
         last = await saveVolume({ title: cleanTitle(f.name), kind: 'images', data: { pages: blobs }, doc: imageDoc(blobs), size: f.size });
+        await autoSeries(last);
       } else {
         const blobs = f.map(x => new Blob([x], { type: x.type || mimeOf(x.name) }));
         const size = f.reduce((s, x) => s + x.size, 0);
@@ -946,10 +1020,10 @@ function leaveBrokenReader() {
 }
 // capitolo successivo della stessa serie
 function nextChapter() {
-  if (!R.book || !R.book.path) return null;
-  const sr = seriesOf(R.book.path); if (!sr) return null;
-  const list = LIB.filter(i => i.series === sr).sort((a, b) => natural(sortKey(a), sortKey(b)));
-  const k = list.findIndex(i => i.path === R.book.path);
+  if (!R.book) return null;
+  const sr = R.book.path ? seriesOf(R.book.path) : R.book.series; if (!sr) return null;
+  const list = LIB.filter(i => i.series === sr).sort(byName);
+  const k = list.findIndex(i => i.id === R.book.id);
   return k >= 0 ? list[k + 1] || null : null;
 }
 async function goNext(item) {
@@ -961,7 +1035,7 @@ async function goNext(item) {
   try { await doc.destroy(); } catch {}
   await autoFree(book);
   LIB = await libraryItems();
-  const it = LIB.find(x => x.path === item.path) || item;
+  const it = LIB.find(x => x.id === item.id) || item;
   if (it.state === 'local') await openBook(it.id); else await downloadRemote(it.path);
 }
 $('#backBtn').onclick = () => closeReader(false);
@@ -1687,6 +1761,7 @@ async function downloadRemote(path, open = true) {
     await DB.open();
     navigator.storage?.persist?.().catch(() => {});
     GH.load(); ghButton();
+    await groupExisting();
     await renderLibrary();
     GH.sync(true);
   } catch (e) {
