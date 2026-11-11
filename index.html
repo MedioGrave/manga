@@ -1125,14 +1125,23 @@ function ghSetup() {
   openSheet(`<h3>Collega GitHub</h3>
     <p class="note">Repository privato con i tuoi volumi e token personale con accesso a quel repository (permesso <code>Contents</code>: lettura e scrittura).</p>
     <div class="opt"><label>REPOSITORY</label><input id="ghRepo" class="field" style="margin:0" value="${esc(c.owner + '/' + c.repo)}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
-    <div class="opt"><label>TOKEN</label><input id="ghTok" class="field" style="margin:0" type="password" placeholder="github_pat_…" value="${esc(c.token)}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <div class="opt"><label>TOKEN</label><textarea id="ghTok" class="field" style="margin:0;height:84px;resize:none;font-family:ui-monospace,Menlo,monospace;font-size:13px" placeholder="Incolla qui il token: github_pat_…" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true">${esc(c.token)}</textarea>
+    <div id="ghTokInfo" class="note" style="margin:8px 0 0"></div></div>
     <div class="row2"><button class="btn2" data-x>Annulla</button><button class="btn1" data-ok>Collega</button></div>`);
   $('#sheet [data-x]').onclick = closeSheet;
+  const tokInfo = () => {
+    const t = $('#ghTok').value.replace(/\s+/g, '');
+    $('#ghTokInfo').textContent = !t ? '' : /^(github_pat_|ghp_)/.test(t)
+      ? `${t.length} caratteri · inizia con ${t.slice(0, 11)}… finisce con …${t.slice(-4)}`
+      : 'Attenzione: un token GitHub inizia con github_pat_ (o ghp_)';
+  };
+  $('#ghTok').oninput = tokInfo; tokInfo();
   $('#sheet [data-ok]').onclick = async () => {
     const [owner, repo] = $('#ghRepo').value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '').split('/');
-    const token = $('#ghTok').value.trim();
+    const token = $('#ghTok').value.replace(/\s+/g, '');
     if (!owner || !repo || !token) return toast('Compila repository e token');
     closeSheet();
+    const prev = GH.cfg;
     GH.cfg = { owner, repo, token }; GH.branch = null;
     loading('Controllo il collegamento…');
     try {
@@ -1141,7 +1150,7 @@ function ghSetup() {
       toast('GitHub collegato');
       GH.sync(true);
     } catch (e) {
-      loading(''); GH.cfg = null; ghButton();
+      loading(''); GH.cfg = prev; GH.branch = null; ghButton();
       toast(e.message === 'token' ? 'Token non valido' : e.message === 'repo' ? 'Repository non trovato: controlla nome e permessi del token' : 'GitHub non raggiungibile');
     }
   };
