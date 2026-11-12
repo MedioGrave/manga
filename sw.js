@@ -1,8 +1,9 @@
 // Manga Reader — service worker: funziona anche offline.
-const VERSION = 'manga-v8';
+const VERSION = 'manga-v9';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './icon.svg',
   './icon-180.png', './icon-192.png', './icon-512.png',
+  './fonts/josefin-sans-latin-600-normal.woff2', './fonts/josefin-sans-latin-700-normal.woff2', './fonts/poppins-latin-400-normal.woff2', './fonts/poppins-latin-500-normal.woff2', './fonts/poppins-latin-600-normal.woff2',
   './pdfjs/pdf.min.js', './pdfjs/pdf.worker.min.js', './fflate.js'
 ];
 
