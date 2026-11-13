@@ -391,7 +391,7 @@ const $ = s => document.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 /* ================= impostazioni ================= */
-const DEF = { theme: 'paper', tone: 'normal', dim: 0, coll: '', dir: 'rtl', mode: 'auto', effect: 'flip', bg: 'black', fit: 'width', crop: 'on', autoFree: 'on', sort: 'name', chOrder: 'asc', hintSeen: false };
+const DEF = { theme: 'paper', tone: 'normal', dim: 0, coll: '', dir: 'rtl', mode: 'auto', effect: 'flip', bg: 'black', fit: 'width', crop: 'on', autoFree: 'on', sort: 'alpha', chOrder: 'asc', hintSeen: false };
 let S = { ...DEF };
 try { S = { ...DEF, ...JSON.parse(localStorage.getItem('manga-settings') || '{}') }; } catch {}
 function saveSettings() { try { localStorage.setItem('manga-settings', JSON.stringify(S)); } catch {} }
@@ -485,15 +485,37 @@ async function libraryItems() {
     items.push({ id: remoteId(r.path), title: r.title, series: seriesOf(r.path), path: r.path, cover: null,
       pages: pr.pages || 0, page: pr.page || 0, read: !!pr.read, lastRead: pr.updated || 0, size: r.size, state: 'remote' });
   }
+  // un volume caricato dal telefono con il nome di una collezione esistente finisce lì da solo
+  const names = new Map([...items.map(i => i.series), ...(S.colls || [])].filter(Boolean).map(n => [n.toLowerCase(), n]));
+  for (const i of items) if (!i.series && i.book && !i.path && !('series' in i.book)) {
+    const g = guessSeries(i.title); if (g && names.has(g.toLowerCase())) i.series = names.get(g.toLowerCase());
+  }
   return items;
 }
-const sortKey = i => i.path || ((i.series ? i.series + '/' : '') + i.title);
-const SORTS = { name: 'Nome', recent: 'Letti di recente', added: 'Aggiunti di recente' };
-const byName = (a, b) => natural(sortKey(a), sortKey(b));
+// si ordina sempre per il titolo che vedi (non per il nome del file o della cartella)
+const cleanForSort = t => (t || '').replace(/^\s*(\[[^\]]*\]|\([^)]*\))\s*/g, '').trim();
+const byTitle = (a, b) => natural(cleanForSort(a.title), cleanForSort(b.title)) || natural(a.title, b.title);
+// numero del volume/capitolo: l'ultimo numero nel titolo, ignorando anni tra parentesi
+const numOf = t => {
+  const m = (t || '').replace(/(\([^)]*\)|\[[^\]]*\])/g, ' ').match(/(\d+(?:[.,]\d+)?)(?!.*\d)/);
+  return m ? parseFloat(m[1].replace(',', '.')) : null;
+};
+// dentro una collezione: in ordine di volume (1, 2, … 10), a parità di numero per titolo
+const byNum = (a, b) => {
+  const x = numOf(a.title), y = numOf(b.title);
+  if (x != null && y != null && x !== y) return x - y;
+  if ((x == null) !== (y == null)) return x == null ? 1 : -1;
+  return byTitle(a, b);
+};
+const byName = byNum;
+const sortKey = i => i.title;
+const SORTS = { alpha: 'Alfabetico A → Z', alphaDesc: 'Alfabetico Z → A', recent: 'Letti di recente', added: 'Aggiunti di recente' };
+if (!SORTS[S.sort]) { S.sort = 'alpha'; saveSettings(); }
 function sortItems(list) {
-  if (S.sort === 'recent') return list.sort((a, b) => (b.lastRead || 0) - (a.lastRead || 0) || byName(a, b));
-  if (S.sort === 'added') return list.sort((a, b) => (b.added || 0) - (a.added || 0) || byName(a, b));
-  return list.sort(byName);
+  if (S.sort === 'recent') return list.sort((a, b) => (b.lastRead || 0) - (a.lastRead || 0) || byTitle(a, b));
+  if (S.sort === 'added') return list.sort((a, b) => (b.added || 0) - (a.added || 0) || byTitle(a, b));
+  if (S.sort === 'alphaDesc') return list.sort((a, b) => byTitle(b, a));
+  return list.sort(byTitle);
 }
 // "Berserk 57", "Berserk Vol. 58", "Berserk_cap_59" -> "Berserk"
 function guessSeries(title) {
@@ -547,11 +569,12 @@ async function renderLibrary() {
   const agg = (list, f) => Math.max(0, ...list.map(f));
   if (S.sort === 'recent') series.sort((a, b) => agg(b[1], i => i.lastRead || 0) - agg(a[1], i => i.lastRead || 0) || natural(a[0], b[0]));
   else if (S.sort === 'added') series.sort((a, b) => agg(b[1], i => i.added || 0) - agg(a[1], i => i.added || 0) || natural(a[0], b[0]));
+  else if (S.sort === 'alphaDesc') series.sort((a, b) => natural(b[0], a[0]));
   else series.sort((a, b) => natural(a[0], b[0]));
   const singles = sortItems(LIB.filter(i => !i.series));
-  const sortBtn = `<button class="sortbtn" data-sort>Ordina: <b>${SORTS[S.sort] || 'Nome'}</b> ▾</button>`;
+  const sortBtn = `<button class="sortbtn" data-sort>Ordina: <b>${SORTS[S.sort] || SORTS.alpha}</b> ▾</button>`;
   const seriesCard = ([name, list]) => {
-    list.sort((a, b) => natural(sortKey(a), sortKey(b)));
+    list.sort(byNum);
     const cov = list.find(i => i.cover), nRead = list.filter(i => i.read).length;
     const allRead = list.length && nRead === list.length;
     return `<div class="book stack"><button class="cover" data-series="${esc(name)}" style="width:100%;display:block">
